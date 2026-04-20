@@ -77,7 +77,7 @@ class FetchBillingView(APIView):
                 credentials.connection_error = msg
                 credentials.save()
                 return Response(
-                    {'error': f'Connection failed: {msg}'},
+                    {'error': 'Connection failed. Please verify credentials and permissions.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             

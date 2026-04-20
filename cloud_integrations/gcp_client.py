@@ -25,20 +25,25 @@ class GCPCostClient:
             self.project_id = service_account_json.get('project_id')
             self.credentials = credentials
             self.billing_client = billing_v1.CloudBillingClient(credentials=credentials)
+            self.bigquery_client = None
             self.is_connected = True
         except Exception as e:
             self.is_connected = False
             self.error = str(e)
+
+    def _get_bigquery_client(self):
+        from google.cloud import bigquery
+        if self.bigquery_client is None:
+            self.bigquery_client = bigquery.Client(
+                project=self.project_id,
+                credentials=self.credentials
+            )
+        return self.bigquery_client
     
     def test_connection(self):
         """Test if credentials are valid"""
         try:
-            from google.cloud import bigquery
-            
-            client = bigquery.Client(
-                project=self.project_id,
-                credentials=self.credentials
-            )
+            client = self._get_bigquery_client()
             
             query = "SELECT 1"
             client.query(query).result()
@@ -50,19 +55,14 @@ class GCPCostClient:
     def get_daily_costs(self, days=30):
         """Get daily costs for the last N days"""
         try:
-            from google.cloud import bigquery
-            
-            client = bigquery.Client(
-                project=self.project_id,
-                credentials=self.credentials
-            )
+            client = self._get_bigquery_client()
             
             end_date = datetime.now().date()
             start_date = end_date - timedelta(days=days)
             
             query = f"""
             SELECT
-                TIMESTAMP_TRUNC(CAST(usage_start_time AS DATE), DAY) as date,
+                CAST(usage_start_time AS DATE) as date,
                 service.description as service,
                 SUM(cost) as total_cost
             FROM
@@ -113,12 +113,7 @@ class GCPCostClient:
     def get_service_costs(self, days=30):
         """Get costs by service"""
         try:
-            from google.cloud import bigquery
-            
-            client = bigquery.Client(
-                project=self.project_id,
-                credentials=self.credentials
-            )
+            client = self._get_bigquery_client()
             
             end_date = datetime.now().date()
             start_date = end_date - timedelta(days=days)
@@ -156,12 +151,7 @@ class GCPCostClient:
     def get_total_cost(self, days=30):
         """Get total cost for the last N days"""
         try:
-            from google.cloud import bigquery
-            
-            client = bigquery.Client(
-                project=self.project_id,
-                credentials=self.credentials
-            )
+            client = self._get_bigquery_client()
             
             end_date = datetime.now().date()
             start_date = end_date - timedelta(days=days)
