@@ -1,9 +1,12 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
-test('renders learn react link', () => {
-  render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+test('renders children inside error boundary', () => {
+  render(
+    <ErrorBoundary>
+      <div>CloudLens UI</div>
+    </ErrorBoundary>
+  );
+  expect(screen.getByText(/cloudlens ui/i)).toBeInTheDocument();
 });

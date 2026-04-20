@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { Alert } from '../components/Alert';
 import api from '../services/api';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, TrendingUp, Activity, Zap } from 'lucide-react';
 
 export const AnomalyDetection: React.FC = () => {
@@ -16,30 +16,40 @@ export const AnomalyDetection: React.FC = () => {
   const [error, setError] = useState('');
   const [testing, setTesting] = useState(false);
 
-  useEffect(() => {
-    fetchAnomalies();
-  }, [provider]);
-
-  const fetchAnomalies = async () => {
+  const fetchAnomalies = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.getBillingHistory(provider, 90);
-      
-      // Prepare chart data with anomalies marked
-      const processedData = (data.daily_costs || []).map((item: any) => ({
-        ...item,
-        isAnomaly: item.is_anomaly || false,
+
+      const records = data.records || [];
+      const processedData = records.map((item: any) => ({
+        date: item.date,
+        total: Number(item.total_cost || 0),
+        isAnomaly: Boolean(item.is_anomaly),
       }));
-      
+      const detectedAnomalies = records
+        .filter((item: any) => item.is_anomaly)
+        .map((item: any) => ({
+          date: item.date,
+          expected_cost: Number(item.total_cost || 0) - Number(item.anomaly_score || 0),
+          actual_cost: Number(item.total_cost || 0),
+          spike_percentage: Number(item.anomaly_score || 0),
+          reason: item.anomaly_score ? `Anomaly score ${item.anomaly_score}` : '',
+        }));
+
       setChartData(processedData);
-      setAnomalies(data.detected_anomalies || []);
+      setAnomalies(detectedAnomalies);
     } catch (err: any) {
       setError('Failed to load anomaly data');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [provider]);
+
+  useEffect(() => {
+    fetchAnomalies();
+  }, [fetchAnomalies]);
 
   const handleTestAnomaly = async () => {
     try {

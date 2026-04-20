@@ -1,3 +1,7 @@
-from django.db import models
+"""
+Billing app models.
 
-# Create your models here.
+This app reuses shared data models from api.models.
+"""
+
+from api.models import BillingCache, CostAlert  # noqa: F401

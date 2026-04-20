@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -7,7 +7,7 @@ import { Loading } from '../components/Loading';
 import { Alert } from '../components/Alert';
 import api from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { TrendingUp, Download, RefreshCw } from 'lucide-react';
+import { TrendingUp, RefreshCw } from 'lucide-react';
 
 export const Billing: React.FC = () => {
   const [provider, setProvider] = useState('AWS');
@@ -18,11 +18,7 @@ export const Billing: React.FC = () => {
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [provider, days]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const [summaryData, historyData] = await Promise.all([
@@ -37,7 +33,11 @@ export const Billing: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [provider, days]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleSync = async () => {
     try {
@@ -52,7 +52,25 @@ export const Billing: React.FC = () => {
     }
   };
 
-  const chartData = history?.daily_costs || [];
+  const chartData = useMemo(
+    () =>
+      (history?.records || []).map((item: any) => ({
+        date: item.date,
+        total: item.total_cost,
+      })),
+    [history]
+  );
+
+  const serviceBreakdown = useMemo(() => {
+    const summary: Record<string, number> = {};
+    (history?.records || []).forEach((item: any) => {
+      const services = item.service_costs || {};
+      Object.entries(services).forEach(([name, cost]) => {
+        summary[name] = (summary[name] || 0) + Number(cost || 0);
+      });
+    });
+    return summary;
+  }, [history]);
 
   const formatCurrency = (value: any) => {
     if (typeof value === 'number') {
@@ -171,13 +189,13 @@ export const Billing: React.FC = () => {
         )}
 
         {/* Service Breakdown */}
-        {history?.service_breakdown && Object.keys(history.service_breakdown).length > 0 && (
+        {Object.keys(serviceBreakdown).length > 0 && (
           <Card>
             <h2 className="text-2xl font-bold mb-6">Top Services by Cost</h2>
 
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
-                data={Object.entries(history.service_breakdown)
+                data={Object.entries(serviceBreakdown)
                   .map(([service, cost]: [string, any]) => ({ service, cost }))
                   .sort((a, b) => (b.cost as number) - (a.cost as number))
                   .slice(0, 10)}
