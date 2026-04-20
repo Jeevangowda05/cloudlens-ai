@@ -72,8 +72,8 @@ class CostSimulationView(APIView):
                 },
                 status=status.HTTP_201_CREATED,
             )
-        except ValueError as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response({'error': 'Invalid simulation input'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
             return Response({'error': 'Unable to create simulation'}, status=status.HTTP_400_BAD_REQUEST)
 
