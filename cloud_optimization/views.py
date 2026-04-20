@@ -21,6 +21,13 @@ class CostSimulationView(APIView):
             rightsizing = int(request.data.get('rightsizing_percent', 10))
             reserved = int(request.data.get('reserved_savings_percent', 18))
             spot = int(request.data.get('spot_instances_percent', 0))
+            if base_cost < 0:
+                return Response({'error': 'base_monthly_cost must be non-negative'}, status=status.HTTP_400_BAD_REQUEST)
+            if any(percent < 0 or percent > 100 for percent in [rightsizing, reserved, spot]):
+                return Response(
+                    {'error': 'Percentage values must be between 0 and 100'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             rightsized_cost = base_cost * (1 - Decimal(rightsizing) / 100)
             after_reserved = rightsized_cost * (1 - Decimal(reserved) / 100)
@@ -55,8 +62,10 @@ class CostSimulationView(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
-        except Exception as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, ArithmeticError):
+            return Response({'error': 'Invalid simulation input'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'error': 'Unable to create simulation'}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request):
         simulations = CostSimulation.objects.filter(user=request.user)
@@ -92,6 +101,13 @@ class RegionAdvisorView(APIView):
                 'ap-south-1': 465,
                 'eu-north-1': 384,
             }
+            carbon_profiles = {
+                'us-east-1': 'Medium',
+                'us-west-2': 'Low',
+                'eu-west-1': 'Medium',
+                'ap-south-1': 'High',
+                'eu-north-1': 'Low',
+            }
 
             current_cost = Decimal(str(regions.get(current_region, 420)))
             recommendations = []
@@ -108,7 +124,7 @@ class RegionAdvisorView(APIView):
                             'name': f'Region {region}',
                             'monthly_cost': cost,
                             'potential_savings': float(savings),
-                            'carbon_profile': 'Low' if cost < current_cost else 'High',
+                            'carbon_profile': carbon_profiles.get(region, 'Medium'),
                         }
                     )
 
@@ -122,8 +138,8 @@ class RegionAdvisorView(APIView):
                 }
             )
 
-        except Exception as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'error': 'Unable to fetch region recommendations'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class IdleResourcesView(APIView):
@@ -158,8 +174,8 @@ class IdleResourcesView(APIView):
                 }
             )
 
-        except Exception as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'error': 'Unable to list idle resources'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CostReportView(APIView):
@@ -212,8 +228,10 @@ class CostReportView(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
-        except Exception as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid report input'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'error': 'Unable to generate report'}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request):
         reports = CostReport.objects.filter(user=request.user)
@@ -258,5 +276,5 @@ class TagCostAllocationView(APIView):
             total = sum(float(tag_group.total_cost) for tag_group in tag_groups)
             return Response({'tag_groups': data, 'total_cost': total, 'count': len(data)})
 
-        except Exception as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'error': 'Unable to fetch tag allocation'}, status=status.HTTP_400_BAD_REQUEST)

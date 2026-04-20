@@ -45,6 +45,15 @@ class CloudOptimizationApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('recommendations', response.data)
 
+    def test_simulation_rejects_invalid_percentages(self):
+        response = self.client.post(
+            '/api/optimize/simulate/',
+            {'base_monthly_cost': '1000.00', 'rightsizing_percent': 120},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_idle_resources_returns_totals(self):
         IdleResource.objects.create(
             user=self.user,
