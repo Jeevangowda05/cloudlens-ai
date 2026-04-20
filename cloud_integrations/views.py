@@ -13,6 +13,8 @@ from api.models import CloudCredentials, BillingCache, DailyBillingRecord
 from api.serializers import CloudCredentialsSerializer
 from cloud_integrations.encryption import encryptor
 from cloud_integrations.aws_client import AWSCostClient
+from cloud_integrations.azure_client import AzureCostClient
+from cloud_integrations.gcp_client import GCPCostClient
 import json
 
 
@@ -42,59 +44,76 @@ class FetchBillingView(APIView):
             if provider == 'AWS':
                 access_key = encryptor.decrypt(credentials.encrypted_key_1)
                 secret_key = encryptor.decrypt(credentials.encrypted_key_2)
-                
                 client = AWSCostClient(access_key, secret_key)
-                
-                # Test connection
-                is_valid, msg = client.test_connection()
-                if not is_valid:
-                    credentials.is_verified = False
-                    credentials.connection_error = msg
-                    credentials.save()
+            elif provider == 'AZURE':
+                client_id = encryptor.decrypt(credentials.encrypted_key_1)
+                client_secret = encryptor.decrypt(credentials.encrypted_key_2)
+                subscription_id = credentials.additional_data.get('subscription_id')
+                tenant_id = credentials.additional_data.get('tenant_id')
+                if not subscription_id or not tenant_id:
                     return Response(
-                        {'error': f'Connection failed: {msg}'},
+                        {'error': 'Azure credentials are incomplete'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                
-                # Fetch data
-                daily_costs = client.get_daily_costs(days=30)
-                service_costs = client.get_service_costs(days=30)
-                total_cost = client.get_total_cost(days=30)
-                
-                # Mark as verified and update timestamp
-                credentials.is_verified = True
-                credentials.connection_error = ''
-                credentials.last_tested_at = timezone.now()
-                credentials.last_used_at = timezone.now()
-                credentials.save()
-                
-                # Cache results
-                expires_at = timezone.now() + timedelta(hours=6)
-                BillingCache.objects.update_or_create(
-                    user=request.user,
-                    cloud_provider=provider,
-                    defaults={
-                        'total_cost': total_cost,
-                        'daily_costs': daily_costs,
-                        'service_costs': service_costs,
-                        'expires_at': expires_at,
-                        'is_fresh': True
-                    }
+                client = AzureCostClient(
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    tenant_id=tenant_id,
+                    subscription_id=subscription_id
                 )
-                
-                return Response({
-                    'message': f'Billing data fetched from {provider}',
-                    'total_cost': total_cost,
-                    'daily_costs': daily_costs[:7],  # Last 7 days
-                    'service_costs': service_costs,
-                    'fetched_at': timezone.now()
-                }, status=status.HTTP_200_OK)
-            
+            elif provider == 'GCP':
+                service_account_json = encryptor.decrypt(credentials.encrypted_key_1)
+                client = GCPCostClient(service_account_json)
             else:
                 return Response(
                     {'error': f'{provider} integration not yet implemented'},
                     status=status.HTTP_501_NOT_IMPLEMENTED
                 )
+
+            # Test connection
+            is_valid, msg = client.test_connection()
+            if not is_valid:
+                credentials.is_verified = False
+                credentials.connection_error = msg
+                credentials.save()
+                return Response(
+                    {'error': 'Connection failed. Please verify credentials and permissions.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Fetch data
+            daily_costs = client.get_daily_costs(days=30)
+            service_costs = client.get_service_costs(days=30)
+            total_cost = client.get_total_cost(days=30)
+            
+            # Mark as verified and update timestamp
+            credentials.is_verified = True
+            credentials.connection_error = ''
+            credentials.last_tested_at = timezone.now()
+            credentials.last_used_at = timezone.now()
+            credentials.save()
+            
+            # Cache results
+            expires_at = timezone.now() + timedelta(hours=6)
+            BillingCache.objects.update_or_create(
+                user=request.user,
+                cloud_provider=provider,
+                defaults={
+                    'total_cost': total_cost,
+                    'daily_costs': daily_costs,
+                    'service_costs': service_costs,
+                    'expires_at': expires_at,
+                    'is_fresh': True
+                }
+            )
+            
+            return Response({
+                'message': f'Billing data fetched from {provider}',
+                'total_cost': total_cost,
+                'daily_costs': daily_costs[:7],  # Last 7 days
+                'service_costs': service_costs,
+                'fetched_at': timezone.now()
+            }, status=status.HTTP_200_OK)
         
         except CloudCredentials.DoesNotExist:
             return Response(
