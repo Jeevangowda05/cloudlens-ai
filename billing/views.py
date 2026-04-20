@@ -26,7 +26,7 @@ def chat_with_billing_ai(request):
         user = request.user
         
         billing_context = []
-        caches = BillingCache.objects.filter(user=user, is_fresh=True).order_by('cloud_provider')
+        caches = BillingCache.objects.filter(user=user, is_fresh=True).order_by('cloud_provider')[:3]
         for cache in caches:
             services = sorted(cache.service_costs.items(), key=lambda item: item[1], reverse=True)
             billing_context.append({

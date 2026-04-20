@@ -8,10 +8,31 @@ import api from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, TrendingUp, Activity, Zap } from 'lucide-react';
 
+interface AnomalyHistoryRecord {
+  date: string;
+  total_cost: number;
+  is_anomaly: boolean;
+  anomaly_score: number;
+}
+
+interface ChartPoint {
+  date: string;
+  total: number;
+  isAnomaly: boolean;
+}
+
+interface DetectedAnomaly {
+  date: string;
+  expected_cost: number;
+  actual_cost: number;
+  spike_percentage: number;
+  reason: string;
+}
+
 export const AnomalyDetection: React.FC = () => {
   const [provider, setProvider] = useState('AWS');
-  const [anomalies, setAnomalies] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [anomalies, setAnomalies] = useState<DetectedAnomaly[]>([]);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [testing, setTesting] = useState(false);
@@ -21,21 +42,28 @@ export const AnomalyDetection: React.FC = () => {
       setLoading(true);
       const data = await api.getBillingHistory(provider, 90);
 
-      const records = data.records || [];
-      const processedData = records.map((item: any) => ({
+      const records: AnomalyHistoryRecord[] = data.records || [];
+      const processedData = records.map((item) => ({
         date: item.date,
         total: Number(item.total_cost || 0),
         isAnomaly: Boolean(item.is_anomaly),
       }));
       const detectedAnomalies = records
-        .filter((item: any) => item.is_anomaly)
-        .map((item: any) => ({
-          date: item.date,
-          expected_cost: Number(item.total_cost || 0) - Number(item.anomaly_score || 0),
-          actual_cost: Number(item.total_cost || 0),
-          spike_percentage: Number(item.anomaly_score || 0),
-          reason: item.anomaly_score ? `Anomaly score ${item.anomaly_score}` : '',
-        }));
+        .filter((item) => item.is_anomaly)
+        .map((item) => {
+          // API anomaly_score is treated as percentage spike over baseline.
+          // expected = actual / (1 + spike%)
+          const spikePercentage = Number(item.anomaly_score || 0);
+          const baselineMultiplier = 1 + spikePercentage / 100;
+          const safeMultiplier = baselineMultiplier > 0.1 ? baselineMultiplier : 1;
+          return {
+            spike_percentage: spikePercentage,
+            date: item.date,
+            expected_cost: Number(item.total_cost || 0) / safeMultiplier,
+            actual_cost: Number(item.total_cost || 0),
+            reason: item.anomaly_score ? `Anomaly score ${item.anomaly_score}` : '',
+          };
+        });
 
       setChartData(processedData);
       setAnomalies(detectedAnomalies);

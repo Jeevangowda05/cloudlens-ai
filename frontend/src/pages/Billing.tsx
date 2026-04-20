@@ -9,10 +9,27 @@ import api from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { TrendingUp, RefreshCw } from 'lucide-react';
 
+interface BillingSummary {
+  total_cost: number;
+  daily_average: number;
+  max_daily_cost: number;
+  forecasted_monthly: number;
+}
+
+interface BillingRecord {
+  date: string;
+  total_cost: number;
+  service_costs: Record<string, number>;
+}
+
+interface BillingHistory {
+  records: BillingRecord[];
+}
+
 export const Billing: React.FC = () => {
   const [provider, setProvider] = useState('AWS');
-  const [summary, setSummary] = useState<any>(null);
-  const [history, setHistory] = useState<any>(null);
+  const [summary, setSummary] = useState<BillingSummary | null>(null);
+  const [history, setHistory] = useState<BillingHistory | null>(null);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -54,7 +71,7 @@ export const Billing: React.FC = () => {
 
   const chartData = useMemo(
     () =>
-      (history?.records || []).map((item: any) => ({
+      (history?.records || []).map((item) => ({
         date: item.date,
         total: item.total_cost,
       })),
@@ -62,14 +79,14 @@ export const Billing: React.FC = () => {
   );
 
   const serviceBreakdown = useMemo(() => {
-    const summary: Record<string, number> = {};
-    (history?.records || []).forEach((item: any) => {
+    const serviceTotals: Record<string, number> = {};
+    (history?.records || []).forEach((item: BillingRecord) => {
       const services = item.service_costs || {};
       Object.entries(services).forEach(([name, cost]) => {
-        summary[name] = (summary[name] || 0) + Number(cost || 0);
+        serviceTotals[name] = (serviceTotals[name] || 0) + Number(cost || 0);
       });
     });
-    return summary;
+    return serviceTotals;
   }, [history]);
 
   const formatCurrency = (value: any) => {
@@ -196,7 +213,7 @@ export const Billing: React.FC = () => {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
                 data={Object.entries(serviceBreakdown)
-                  .map(([service, cost]: [string, any]) => ({ service, cost }))
+                  .map(([service, cost]: [string, number]) => ({ service, cost }))
                   .sort((a, b) => (b.cost as number) - (a.cost as number))
                   .slice(0, 10)}
               >
