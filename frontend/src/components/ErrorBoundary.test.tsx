@@ -17,6 +17,7 @@ describe('ErrorBoundary', () => {
     );
 
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 });

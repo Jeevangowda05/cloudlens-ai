@@ -2,7 +2,6 @@
 Encryption utilities for storing sensitive credentials
 """
 
-import os
 from cryptography.fernet import Fernet
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -12,7 +11,7 @@ class CredentialEncryptor:
     """Encrypt and decrypt sensitive credentials"""
     
     def __init__(self):
-        key = settings.ENCRYPTION_KEY or os.getenv('ENCRYPTION_KEY')
+        key = settings.ENCRYPTION_KEY
         if not key:
             raise ImproperlyConfigured("ENCRYPTION_KEY not set in environment.")
         self.cipher = Fernet(key.encode())

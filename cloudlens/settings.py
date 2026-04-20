@@ -15,14 +15,15 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security settings
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
-def get_required_env(name: str, allow_empty: bool = False) -> str:
+def get_required_env(name: str) -> str:
+    """Return a required environment variable value or raise ImproperlyConfigured."""
     value = os.getenv(name)
-    if value is None or (not allow_empty and value.strip() == ''):
+    if value is None or value.strip() == '':
         raise ImproperlyConfigured(f"Missing required environment variable: {name}")
     return value
 
