@@ -9,7 +9,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 
 from .serializers import (
     SignupSerializer, LoginSerializer, UserSerializer,
@@ -139,6 +140,43 @@ class ProfileView(APIView):
                 {'error': 'Profile not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class ChangePasswordView(APIView):
+    """Change user password"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+
+        if not old_password or not new_password:
+            return Response(
+                {'error': 'old_password and new_password are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not request.user.check_password(old_password):
+            return Response(
+                {'error': 'Old password is incorrect'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            validate_password(new_password, request.user)
+        except ValidationError as exc:
+            return Response({'errors': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.user.set_password(new_password)
+        request.user.save(update_fields=['password'])
+
+        Token.objects.filter(user=request.user).delete()
+        token = Token.objects.create(user=request.user)
+
+        return Response(
+            {'message': 'Password changed successfully', 'token': token.key},
+            status=status.HTTP_200_OK
+        )
 
 
 class ConnectCloudView(APIView):

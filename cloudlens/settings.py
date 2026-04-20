@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +18,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+
+def get_required_env(name: str) -> str:
+    """Return a required environment variable value or raise ImproperlyConfigured."""
+    value = os.getenv(name)
+    if value is None or value.strip() == '':
+        raise ImproperlyConfigured(f"Missing required environment variable: {name}")
+    return value
+
+
+if not DEBUG and SECRET_KEY == 'django-insecure-change-this-in-production':
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set in environment when DEBUG is False."
+    )
 
 # CORS - Allow React frontend
 CORS_ALLOWED_ORIGINS = [
@@ -40,7 +55,7 @@ INSTALLED_APPS = [
     'corsheaders',
     
     # Our apps
-    'api',
+    'api.apps.ApiConfig',
     'cloud_integrations',
     'alerts',
     'analytics',
@@ -124,7 +139,7 @@ REST_FRAMEWORK = {
 # JWT
 
 # Encryption key
-ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+ENCRYPTION_KEY = get_required_env('ENCRYPTION_KEY')
 
 # API Keys
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')

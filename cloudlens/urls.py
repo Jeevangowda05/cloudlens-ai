@@ -13,9 +13,9 @@ urlpatterns = [
     # API routes
     path('api/auth/', include('api.urls')),
     path('api/cloud/', include('cloud_integrations.urls')),
-    path('api/billing/', include('analytics.urls')),
+    path('api/analytics/', include('analytics.urls')),
     path('api/alerts/', include('alerts.urls')),
-    path('api/billing/', include('billing.urls')),  # ← ADD THIS
+    path('api/billing/', include('billing.urls')),
 
 ]
 

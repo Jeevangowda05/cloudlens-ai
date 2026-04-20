@@ -1,11 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api';
-
-interface ApiResponse<T> {
-  data: T;
-  message?: string;
-}
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 interface ApiError {
   error?: string;
@@ -131,7 +126,7 @@ class ApiClient {
 
   // Analytics
   async getCostSummary(provider: string, days: number = 30) {
-    const response = await this.client.get(`/billing/summary/${provider}/`, {
+    const response = await this.client.get(`/analytics/summary/${provider}/`, {
       params: { days },
     });
     return response.data;
@@ -139,20 +134,20 @@ class ApiClient {
 
   async getRecommendations(provider?: string) {
     if (provider) {
-      const response = await this.client.get(`/billing/recommendations/${provider}/`);
+      const response = await this.client.get(`/analytics/recommendations/${provider}/`);
       return response.data;
     }
-    const response = await this.client.get('/billing/recommendations/');
+    const response = await this.client.get('/analytics/recommendations/');
     return response.data;
   }
 
   async generateRecommendations(provider: string) {
-    const response = await this.client.post(`/billing/recommendations/${provider}/`);
+    const response = await this.client.post(`/analytics/recommendations/${provider}/`);
     return response.data;
   }
 
   async getDashboard() {
-    const response = await this.client.get('/billing/dashboard/');
+    const response = await this.client.get('/analytics/dashboard/');
     return response.data;
   }
 
@@ -217,4 +212,6 @@ async getCarbonFootprint(provider: string, days: number = 30) {
   }
 }
 
-export default new ApiClient();
+const apiClient = new ApiClient();
+
+export default apiClient;
