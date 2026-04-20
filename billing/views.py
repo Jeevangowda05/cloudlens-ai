@@ -3,11 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 import requests
-import json
-from django.utils import timezone
-from datetime import timedelta
-from django.db import models
 from django.conf import settings
+from api.models import BillingCache
 
 OPENROUTER_API_KEY = settings.OPENROUTER_API_KEY
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -28,34 +25,16 @@ def chat_with_billing_ai(request):
 
         user = request.user
         
-        # Get user's latest billing data for context
         billing_context = []
-        try:
-            from api.models import CloudConnection, BillingData
-            
-            connections = CloudConnection.objects.filter(user=user, is_active=True)
-            
-            for conn in connections:
-                try:
-                    latest_billing = BillingData.objects.filter(
-                        cloud_connection=conn
-                    ).order_by('-date')[:30]
-                    
-                    total_cost = sum(float(b.total_cost) for b in latest_billing)
-                    daily_avg = total_cost / 30 if latest_billing.exists() else 0
-                    
-                    billing_context.append({
-                        'provider': conn.get_cloud_provider_display(),
-                        'total_cost_30days': round(total_cost, 2),
-                        'daily_average': round(daily_avg, 2),
-                        'services': list(set(
-                            str(b.service_name) for b in latest_billing if b.service_name
-                        )[:5])
-                    })
-                except Exception as e:
-                    print(f"Error: {str(e)}")
-        except Exception as e:
-            print(f"Error: {str(e)}")
+        caches = BillingCache.objects.filter(user=user, is_fresh=True).order_by('cloud_provider')[:3]
+        for cache in caches:
+            services = sorted(cache.service_costs.items(), key=lambda item: item[1], reverse=True)
+            billing_context.append({
+                'provider': cache.get_cloud_provider_display(),
+                'total_cost_30days': round(float(cache.total_cost), 2),
+                'daily_average': round(float(cache.total_cost) / 30, 2),
+                'services': [name for name, _ in services[:5]],
+            })
 
         # Build context
         context_text = "You are CloudLens AI, an expert cloud cost optimization assistant.\n\n"
@@ -76,6 +55,19 @@ User's question: {user_message}
 Keep your response concise (2-3 paragraphs max). Be helpful and focus on cost optimization."""
 
         # Call OpenRouter API (FREE!)
+        if not OPENROUTER_API_KEY:
+            top_provider = billing_context[0]['provider'] if billing_context else 'your cloud account'
+            return Response({
+                'response': (
+                    f"I can see billing context for {top_provider}. "
+                    "Configure OPENROUTER_API_KEY to enable live AI responses. "
+                    "In the meantime, focus on top-cost services and rightsize idle resources."
+                ),
+                'billing_summary': billing_context,
+                'model': 'local-fallback',
+                'is_free': True,
+            }, status=status.HTTP_200_OK)
+
         headers = {
             'Authorization': f'Bearer {OPENROUTER_API_KEY}',
             'Content-Type': 'application/json',
@@ -100,9 +92,6 @@ Keep your response concise (2-3 paragraphs max). Be helpful and focus on cost op
         
         response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=30)
         
-        print(f"OpenRouter response status: {response.status_code}")
-        print(f"OpenRouter response: {response.text}")
-        
         if response.status_code != 200:
             return Response(
                 {'error': f'API Error: {response.status_code} - {response.text}'},
@@ -113,8 +102,7 @@ Keep your response concise (2-3 paragraphs max). Be helpful and focus on cost op
         
         try:
             ai_response = result['choices'][0]['message']['content']
-        except (KeyError, IndexError, TypeError) as e:
-            print(f"Error parsing response: {str(e)}")
+        except (KeyError, IndexError, TypeError):
             ai_response = "I couldn't generate a response. Please try again."
 
         return Response({
@@ -130,7 +118,6 @@ Keep your response concise (2-3 paragraphs max). Be helpful and focus on cost op
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     except Exception as e:
-        print(f"Chat error: {str(e)}")
         return Response(
             {'error': f'Error: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -144,72 +131,51 @@ def get_carbon_footprint(request):
     Calculate carbon footprint based on cloud usage.
     """
     try:
-        provider = request.query_params.get('provider', 'AWS')
+        provider = request.query_params.get('provider', 'AWS').upper()
         days = int(request.query_params.get('days', 30))
-        
-        from api.models import CloudConnection, BillingData
-        
-        try:
-            connection = CloudConnection.objects.get(
-                user=request.user,
-                cloud_provider=provider,
-                is_active=True
-            )
-            
-            billing_data = BillingData.objects.filter(
-                cloud_connection=connection,
-                date__gte=timezone.now() - timedelta(days=days)
-            )
-            
-            carbon_factors = {
-                'us-east-1': 380,
-                'us-west-2': 100,
-                'eu-west-1': 300,
-                'ap-south-1': 650,
-                'ap-southeast-1': 420,
-                'eu-north-1': 50,
-                'eu-central-1': 250,
-            }
-            
-            total_cost = billing_data.aggregate(
-                total=models.Sum('total_cost')
-            )['total'] or 0
-            
-            estimated_kwh = float(total_cost) * 10
-            avg_carbon_factor = carbon_factors.get('ap-south-1', 500)
-            
-            total_co2_grams = estimated_kwh * avg_carbon_factor
-            total_co2_kg = total_co2_grams / 1000
-            
-            sustainability_score = max(0, min(100, 100 - (total_co2_kg / max(days, 1) * 0.5)))
-            
-            recommendations = [
-                'Switch to renewable-friendly regions like Sweden or Oregon',
-                'Use spot instances for non-critical workloads',
-                'Enable auto-scaling to reduce idle capacity',
-                'Consider consolidating underutilized servers'
-            ]
-            
-            return Response({
-                'provider': provider,
-                'period_days': days,
-                'total_cost': float(total_cost),
-                'estimated_kwh': float(estimated_kwh),
-                'total_co2_kg': float(total_co2_kg),
-                'co2_per_day': float(total_co2_kg / max(days, 1)),
-                'sustainability_score': float(sustainability_score),
-                'score_category': 'High Emissions' if sustainability_score < 50 else 'Moderate' if sustainability_score < 75 else 'Green Cloud',
-                'recommendations': recommendations,
-            })
-            
-        except CloudConnection.DoesNotExist:
+        cache = BillingCache.objects.filter(
+            user=request.user,
+            cloud_provider=provider,
+        ).first()
+        if not cache:
             return Response(
                 {'error': f'Cloud connection not found for {provider}'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        carbon_factors = {
+            'AWS': 450,
+            'AZURE': 420,
+            'GCP': 380,
+        }
+
+        total_cost = float(cache.total_cost)
+        estimated_kwh = total_cost * 10
+        provider_factor = carbon_factors.get(provider, 450)
+        total_co2_kg = (estimated_kwh * provider_factor) / 1000
+
+        sustainability_score = max(0, min(100, 100 - (total_co2_kg / max(days, 1) * 0.5)))
+
+        recommendations = [
+            'Switch to renewable-friendly regions where possible',
+            'Use spot/preemptible instances for non-critical workloads',
+            'Enable auto-scaling to reduce idle capacity',
+            'Consolidate underutilized servers',
+        ]
+
+        return Response({
+            'provider': provider,
+            'period_days': days,
+            'total_cost': total_cost,
+            'estimated_kwh': float(estimated_kwh),
+            'total_co2_kg': float(total_co2_kg),
+            'co2_per_day': float(total_co2_kg / max(days, 1)),
+            'sustainability_score': float(sustainability_score),
+            'score_category': 'High Emissions' if sustainability_score < 50 else 'Moderate' if sustainability_score < 75 else 'Green Cloud',
+            'recommendations': recommendations,
+        })
             
     except Exception as e:
-        print(f"Carbon error: {str(e)}")
         return Response(
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

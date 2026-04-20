@@ -12,7 +12,7 @@ export interface CloudCredential {
   cloud_provider_display: string;
   is_active: boolean;
   is_verified: boolean;
-  created_at: string;
+  connected_at: string;
   last_used_at: string;
 }
 

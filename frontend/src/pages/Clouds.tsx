@@ -30,7 +30,7 @@ export const Clouds: React.FC = () => {
     try {
       setLoading(true);
       const data = await api.listClouds();
-      setClouds(data.credentials || []);
+      setClouds(data.connected_clouds || []);
     } catch (err: any) {
       setError('Failed to load clouds');
       console.error(err);
@@ -192,7 +192,7 @@ export const Clouds: React.FC = () => {
                     </p>
                     <p className="text-gray-600">
                       <span className="font-semibold">Connected:</span>{' '}
-                      {new Date(cloud.created_at).toLocaleDateString()}
+                      {new Date(cloud.connected_at).toLocaleDateString()}
                     </p>
                   </div>
 
