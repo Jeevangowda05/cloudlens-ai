@@ -2,6 +2,7 @@
 Cloud optimization views for simulations and analysis.
 """
 
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django.db.models import Sum
@@ -14,16 +15,18 @@ from rest_framework.views import APIView
 from api.models import DailyBillingRecord
 from .models import CostReport, CostSimulation, IdleResource, TagCostGroup
 
+logger = logging.getLogger(__name__)
+
 
 def _to_decimal(value, field_name):
     """Convert incoming numeric input to Decimal with clear validation errors."""
     try:
         decimal_value = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
-        raise ValueError(f'Invalid value for {field_name}')
+        return None, f'Invalid value for {field_name}'
     if decimal_value < 0:
-        raise ValueError(f'{field_name} must be non-negative')
-    return decimal_value
+        return None, f'{field_name} must be non-negative'
+    return decimal_value, None
 
 
 class CostSimulationView(APIView):
@@ -37,10 +40,18 @@ class CostSimulationView(APIView):
         POST /api/optimize/simulate/
         """
         try:
-            base_cost = _to_decimal(request.data.get('base_monthly_cost'), 'base_monthly_cost')
-            rightsizing = _to_decimal(request.data.get('rightsizing_percent', 0), 'rightsizing_percent')
-            reserved = _to_decimal(request.data.get('reserved_savings_percent', 0), 'reserved_savings_percent')
-            spot = _to_decimal(request.data.get('spot_instances_percent', 0), 'spot_instances_percent')
+            base_cost, error = _to_decimal(request.data.get('base_monthly_cost'), 'base_monthly_cost')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            rightsizing, error = _to_decimal(request.data.get('rightsizing_percent', 0), 'rightsizing_percent')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            reserved, error = _to_decimal(request.data.get('reserved_savings_percent', 0), 'reserved_savings_percent')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            spot, error = _to_decimal(request.data.get('spot_instances_percent', 0), 'spot_instances_percent')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
             for value, name in (
                 (rightsizing, 'rightsizing_percent'),
                 (reserved, 'reserved_savings_percent'),
@@ -72,9 +83,8 @@ class CostSimulationView(APIView):
                 },
                 status=status.HTTP_201_CREATED,
             )
-        except ValueError:
-            return Response({'error': 'Invalid simulation input'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
+            logger.exception('Failed to create cost simulation')
             return Response({'error': 'Unable to create simulation'}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request, simulation_id=None):
@@ -260,18 +270,20 @@ class CostReportView(APIView):
             report.generated_at = timezone.now()
             report.save()
         except Exception:
+            logger.exception('Failed to generate cost report', extra={'report_id': report.id, 'user_id': request.user.id})
             report.status = 'FAILED'
             report.save(update_fields=['status'])
 
-        return Response(
-            {
-                'report_id': report.id,
-                'status': report.status,
-                'total_cost': float(report.total_cost or 0),
-                'generated_at': report.generated_at,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        response_data = {
+            'report_id': report.id,
+            'status': report.status,
+            'total_cost': float(report.total_cost or 0),
+            'generated_at': report.generated_at,
+        }
+        if report.status == 'FAILED':
+            response_data['error'] = 'Failed to generate report'
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     def get(self, request, report_id=None):
         """Get a report by id or list reports."""
