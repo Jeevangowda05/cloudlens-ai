@@ -1,9 +1,6 @@
-"""
-Billing app models.
+from django.db import models
 
-This app reuses shared data models from api.models.
-"""
-
-from api.models import BillingCache, CostAlert
-
-__all__ = ['BillingCache', 'CostAlert']
+# Billing app handles billing operations through views/APIs
+# All models are stored in api.models (BillingCache, DailyBillingRecord, etc.)
+# This app provides: billing analytics, carbon footprint calculation, AI chat
+# Views are in billing/views.py
