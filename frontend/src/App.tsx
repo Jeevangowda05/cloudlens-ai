@@ -18,6 +18,7 @@ import { IdleResources } from './pages/IdleResources';
 import { CostForecasting } from './pages/CostForecasting';
 import { ReportGenerator } from './pages/ReportGenerator';
 import { TagCostAllocation } from './pages/TagCostAllocation';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -172,11 +173,13 @@ function AppRoutes() {
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
