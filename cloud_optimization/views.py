@@ -74,8 +74,8 @@ class CostSimulationView(APIView):
             )
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'error': 'Unable to create simulation'}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request, simulation_id=None):
         """Get simulation by id or list all user simulations."""
