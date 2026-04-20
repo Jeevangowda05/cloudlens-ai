@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'alerts',
     'analytics',
     'billing',
+    'cloud_optimization.apps.CloudOptimizationConfig',
 ]
 # Middleware
 MIDDLEWARE = [

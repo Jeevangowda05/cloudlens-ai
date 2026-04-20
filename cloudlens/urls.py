@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/analytics/', include('analytics.urls')),
     path('api/alerts/', include('alerts.urls')),
     path('api/billing/', include('billing.urls')),
+    path('api/optimize/', include('cloud_optimization.urls')),
 
 ]
 
