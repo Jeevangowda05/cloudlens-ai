@@ -189,12 +189,54 @@ async chatWithAI(message: string) {
 }
 
 // Get carbon footprint
-async getCarbonFootprint(provider: string, days: number = 30) {
+  async getCarbonFootprint(provider: string, days: number = 30) {
   const response = await this.client.get('/billing/carbon/', {
     params: { provider, days },
   });
   return response.data;
 }
+
+  // Cloud optimization
+  async simulateOptimization(baseMonthly: number, params: any) {
+    const response = await this.client.post('/optimize/simulate/', {
+      base_monthly_cost: baseMonthly,
+      ...params,
+    });
+    return response.data;
+  }
+
+  async getOptimizationRegions(provider: string, currentRegion: string) {
+    const response = await this.client.get('/optimize/regions/', {
+      params: { provider, current_region: currentRegion },
+    });
+    return response.data;
+  }
+
+  async getOptimizationIdleResources(provider: string, type?: string) {
+    const response = await this.client.get('/optimize/idle-resources/', {
+      params: {
+        provider,
+        ...(type ? { resource_type: type } : {}),
+      },
+    });
+    return response.data;
+  }
+
+  async generateOptimizationReport(type: string, start: string, end: string) {
+    const response = await this.client.post('/optimize/reports/', {
+      report_type: type,
+      period_start: start,
+      period_end: end,
+    });
+    return response.data;
+  }
+
+  async getOptimizationTags(provider: string) {
+    const response = await this.client.get('/optimize/tags/', {
+      params: { provider },
+    });
+    return response.data;
+  }
   // Token management
   private setToken(token: string) {
     this.token = token;
@@ -213,5 +255,16 @@ async getCarbonFootprint(provider: string, days: number = 30) {
 }
 
 const apiClient = new ApiClient();
+
+export const optimize = {
+  simulate: (baseMonthly: number, params: any) => apiClient.simulateOptimization(baseMonthly, params),
+  getRegions: (provider: string, currentRegion: string) =>
+    apiClient.getOptimizationRegions(provider, currentRegion),
+  getIdleResources: (provider: string, type?: string) =>
+    apiClient.getOptimizationIdleResources(provider, type),
+  generateReport: (type: string, start: string, end: string) =>
+    apiClient.generateOptimizationReport(type, start, end),
+  getTags: (provider: string) => apiClient.getOptimizationTags(provider),
+};
 
 export default apiClient;

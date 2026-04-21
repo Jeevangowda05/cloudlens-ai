@@ -1,88 +1,125 @@
-from datetime import date
-from decimal import Decimal
+"""
+Cloud optimization views for simulations and analysis.
+"""
 
+import logging
+from decimal import Decimal, InvalidOperation
+
+from django.db.models import Sum
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.models import DailyBillingRecord, Recommendation
+from api.models import DailyBillingRecord
 from .models import CostReport, CostSimulation, IdleResource, TagCostGroup
+
+logger = logging.getLogger(__name__)
+
+
+def _to_decimal(value, field_name):
+    """Convert incoming numeric input to Decimal with clear validation errors."""
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None, f'Invalid value for {field_name}'
+    if decimal_value < 0:
+        return None, f'{field_name} must be non-negative'
+    return decimal_value, None
 
 
 class CostSimulationView(APIView):
-    """Create and manage cost simulations."""
+    """What-if cost simulation."""
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        """
+        Create cost simulation.
+        POST /api/optimize/simulate/
+        """
         try:
-            base_cost = Decimal(str(request.data.get('base_monthly_cost', 0)))
-            rightsizing = int(request.data.get('rightsizing_percent', 10))
-            reserved = int(request.data.get('reserved_savings_percent', 18))
-            spot = int(request.data.get('spot_instances_percent', 0))
-            if base_cost < 0:
-                return Response({'error': 'base_monthly_cost must be non-negative'}, status=status.HTTP_400_BAD_REQUEST)
-            if any(percent < 0 or percent > 100 for percent in [rightsizing, reserved, spot]):
-                return Response(
-                    {'error': 'Percentage values must be between 0 and 100'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            rightsized_cost = base_cost * (1 - Decimal(rightsizing) / 100)
-            after_reserved = rightsized_cost * (1 - Decimal(reserved) / 100)
-            final_cost = after_reserved * (1 - Decimal(spot) / 100)
-
-            monthly_savings = base_cost - final_cost
-            yearly_savings = monthly_savings * 12
+            base_cost, error = _to_decimal(request.data.get('base_monthly_cost'), 'base_monthly_cost')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            rightsizing, error = _to_decimal(request.data.get('rightsizing_percent', 0), 'rightsizing_percent')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            reserved, error = _to_decimal(request.data.get('reserved_savings_percent', 0), 'reserved_savings_percent')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            spot, error = _to_decimal(request.data.get('spot_instances_percent', 0), 'spot_instances_percent')
+            if error:
+                return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+            for value, name in (
+                (rightsizing, 'rightsizing_percent'),
+                (reserved, 'reserved_savings_percent'),
+                (spot, 'spot_instances_percent'),
+            ):
+                if value > 100:
+                    return Response({'error': f'{name} cannot be greater than 100'}, status=status.HTTP_400_BAD_REQUEST)
 
             simulation = CostSimulation.objects.create(
                 user=request.user,
-                name=request.data.get('name', 'Simulation'),
+                name=request.data.get('name') or 'Untitled Simulation',
                 base_monthly_cost=base_cost,
                 rightsizing_percent=rightsizing,
                 reserved_savings_percent=reserved,
                 spot_instances_percent=spot,
-                projected_monthly_cost=final_cost,
-                monthly_savings=monthly_savings,
-                yearly_savings=yearly_savings,
             )
+
+            savings = simulation.calculate_savings()
+            savings_percent = (savings['monthly_savings'] / base_cost * Decimal('100')) if base_cost > 0 else Decimal('0')
 
             return Response(
                 {
-                    'simulation': {
-                        'id': simulation.id,
-                        'name': simulation.name,
-                        'base_cost': float(base_cost),
-                        'projected_cost': float(final_cost),
-                        'monthly_savings': float(monthly_savings),
-                        'yearly_savings': float(yearly_savings),
-                    }
+                    'simulation_id': simulation.id,
+                    'base_monthly_cost': float(simulation.base_monthly_cost),
+                    'projected_cost': float(savings['projected_cost']),
+                    'monthly_savings': float(savings['monthly_savings']),
+                    'yearly_savings': float(savings['yearly_savings']),
+                    'savings_percent': round(float(savings_percent), 2),
                 },
                 status=status.HTTP_201_CREATED,
             )
-
-        except (ValueError, ArithmeticError):
-            return Response({'error': 'Invalid simulation input'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
+            logger.exception('Failed to create cost simulation')
             return Response({'error': 'Unable to create simulation'}, status=status.HTTP_400_BAD_REQUEST)
 
-    def get(self, request):
+    def get(self, request, simulation_id=None):
+        """Get simulation by id or list all user simulations."""
+        if simulation_id:
+            try:
+                sim = CostSimulation.objects.get(id=simulation_id, user=request.user)
+            except CostSimulation.DoesNotExist:
+                return Response({'error': 'Simulation not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    'id': sim.id,
+                    'name': sim.name,
+                    'base_cost': float(sim.base_monthly_cost),
+                    'projected_cost': float(sim.projected_monthly_cost or 0),
+                    'monthly_savings': float(sim.monthly_savings or 0),
+                    'yearly_savings': float(sim.yearly_savings or 0),
+                    'created_at': sim.created_at,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         simulations = CostSimulation.objects.filter(user=request.user)
         data = [
             {
-                'id': simulation.id,
-                'name': simulation.name,
-                'base_cost': float(simulation.base_monthly_cost),
-                'projected_cost': float(simulation.projected_monthly_cost),
-                'monthly_savings': float(simulation.monthly_savings),
-                'yearly_savings': float(simulation.yearly_savings),
-                'created_at': simulation.created_at,
+                'id': sim.id,
+                'name': sim.name,
+                'base_cost': float(sim.base_monthly_cost),
+                'projected_cost': float(sim.projected_monthly_cost or 0),
+                'monthly_savings': float(sim.monthly_savings or 0),
+                'created_at': sim.created_at,
             }
-            for simulation in simulations
+            for sim in simulations
         ]
-
-        return Response({'simulations': data})
+        return Response({'simulations': data, 'count': len(data)}, status=status.HTTP_200_OK)
 
 
 class RegionAdvisorView(APIView):
@@ -90,92 +127,99 @@ class RegionAdvisorView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    REGION_DATA = {
+        'us-east-1': {'monthly_cost': 420, 'carbon_profile': 'Medium'},
+        'us-west-2': {'monthly_cost': 395, 'carbon_profile': 'Low'},
+        'eu-west-1': {'monthly_cost': 438, 'carbon_profile': 'Low'},
+        'ap-south-1': {'monthly_cost': 465, 'carbon_profile': 'High'},
+        'eu-north-1': {'monthly_cost': 384, 'carbon_profile': 'Low'},
+    }
+
     def get(self, request):
-        try:
-            current_region = request.query_params.get('current_region', 'us-east-1')
+        """
+        Get region recommendations.
+        GET /api/optimize/regions/?provider=AWS&current_region=us-east-1
+        """
+        provider = request.query_params.get('provider', 'AWS')
+        current_region = request.query_params.get('current_region', 'us-east-1')
 
-            regions = {
-                'us-east-1': 420,
-                'us-west-2': 395,
-                'eu-west-1': 438,
-                'ap-south-1': 465,
-                'eu-north-1': 384,
-            }
-            carbon_profiles = {
-                'us-east-1': 'Medium',
-                'us-west-2': 'Low',
-                'eu-west-1': 'Medium',
-                'ap-south-1': 'High',
-                'eu-north-1': 'Low',
-            }
+        current_entry = self.REGION_DATA.get(current_region, self.REGION_DATA['us-east-1'])
+        current_cost = current_entry['monthly_cost']
 
-            current_cost = Decimal(str(regions.get(current_region, 420)))
-            recommendations = []
+        recommendations = []
+        for region, values in self.REGION_DATA.items():
+            if region == current_region:
+                continue
+            savings = current_cost - values['monthly_cost']
+            if savings > 0:
+                recommendations.append(
+                    {
+                        'region': region,
+                        'monthly_cost': values['monthly_cost'],
+                        'monthly_savings': savings,
+                        'yearly_savings': savings * 12,
+                        'carbon_profile': values['carbon_profile'],
+                    }
+                )
 
-            for region, cost in regions.items():
-                if region == current_region:
-                    continue
-
-                savings = current_cost - Decimal(str(cost))
-                if savings > 0:
-                    recommendations.append(
-                        {
-                            'code': region,
-                            'name': f'Region {region}',
-                            'monthly_cost': cost,
-                            'potential_savings': float(savings),
-                            'carbon_profile': carbon_profiles.get(region, 'Medium'),
-                        }
-                    )
-
-            recommendations.sort(key=lambda rec: rec['potential_savings'], reverse=True)
-
-            return Response(
-                {
-                    'current_region': current_region,
-                    'current_cost': float(current_cost),
-                    'recommendations': recommendations[:3],
-                }
-            )
-
-        except Exception:
-            return Response({'error': 'Unable to fetch region recommendations'}, status=status.HTTP_400_BAD_REQUEST)
+        recommendations.sort(key=lambda item: item['monthly_savings'], reverse=True)
+        return Response(
+            {
+                'provider': provider,
+                'current_region': current_region,
+                'current_monthly_cost': current_cost,
+                'recommendations': recommendations[:5],
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class IdleResourcesView(APIView):
-    """Detect and manage idle resources."""
+    """Detect and track idle resources."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            idle_resources = IdleResource.objects.filter(user=request.user)
-            data = [
-                {
-                    'id': resource.id,
-                    'name': resource.resource_name,
-                    'type': resource.resource_type,
-                    'provider': resource.cloud_provider,
-                    'monthly_cost': float(resource.monthly_cost),
-                    'idle_duration_days': resource.idle_duration_days,
-                    'cpu_percent': float(resource.cpu_percent),
-                    'network_mbph': float(resource.network_mbph),
-                    'recommendation': resource.recommended_action,
-                }
-                for resource in idle_resources
-            ]
+        """
+        Get idle resources.
+        GET /api/optimize/idle-resources/?provider=AWS&resource_type=EC2
+        """
+        provider = request.query_params.get('provider', 'AWS')
+        resource_type = request.query_params.get('resource_type')
 
-            total_savings = sum(float(resource.monthly_cost) for resource in idle_resources)
-            return Response(
-                {
-                    'resources': data,
-                    'count': len(data),
-                    'total_potential_savings': total_savings,
-                }
-            )
+        resources = IdleResource.objects.filter(
+            user=request.user,
+            cloud_provider=provider,
+            is_dismissed=False,
+        )
+        if resource_type:
+            resources = resources.filter(resource_type=resource_type)
+        resources = resources.order_by('-monthly_cost')
 
-        except Exception:
-            return Response({'error': 'Unable to list idle resources'}, status=status.HTTP_400_BAD_REQUEST)
+        data = [
+            {
+                'id': resource.id,
+                'resource_id': resource.resource_id,
+                'name': resource.resource_name,
+                'type': resource.resource_type,
+                'monthly_cost': float(resource.monthly_cost),
+                'idle_days': resource.idle_duration_days,
+                'cpu_percent': float(resource.cpu_percent),
+                'network_usage': float(resource.network_mb_per_hour),
+            }
+            for resource in resources
+        ]
+        total_savings = sum(item['monthly_cost'] for item in data)
+
+        return Response(
+            {
+                'resources': data,
+                'count': len(data),
+                'total_potential_savings': round(total_savings, 2),
+                'yearly_potential_savings': round(total_savings * 12, 2),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class CostReportView(APIView):
@@ -184,97 +228,132 @@ class CostReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            period_start = date.fromisoformat(str(request.data.get('period_start')))
-            period_end = date.fromisoformat(str(request.data.get('period_end')))
-            report_type = request.data.get('report_type', 'MONTHLY')
+        """
+        Generate cost report.
+        POST /api/optimize/reports/
+        """
+        report_type = request.data.get('report_type', 'MONTHLY')
+        period_start = request.data.get('period_start')
+        period_end = request.data.get('period_end')
+        if not period_start or not period_end:
+            return Response({'error': 'period_start and period_end are required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        report = CostReport.objects.create(
+            user=request.user,
+            report_type=report_type,
+            period_start=period_start,
+            period_end=period_end,
+            status='GENERATING',
+        )
+
+        try:
             records = DailyBillingRecord.objects.filter(
                 user=request.user,
-                date__range=[period_start, period_end],
+                date__gte=period_start,
+                date__lte=period_end,
             )
+            totals = records.aggregate(total=Sum('total_cost'))
+            total_cost = totals['total'] or Decimal('0')
 
-            total_cost = sum(float(record.total_cost) for record in records)
             service_breakdown = {}
+            region_breakdown = {}
             for record in records:
                 for service, cost in (record.service_costs or {}).items():
-                    service_breakdown[service] = service_breakdown.get(service, 0) + cost
+                    service_breakdown[service] = round(service_breakdown.get(service, 0) + float(cost), 2)
+                for region, cost in (record.region_costs or {}).items():
+                    region_breakdown[region] = round(region_breakdown.get(region, 0) + float(cost), 2)
 
-            recommendations_count = Recommendation.objects.filter(
-                user=request.user,
-                is_active=True,
-            ).count()
+            report.total_cost = total_cost
+            report.service_breakdown = service_breakdown
+            report.region_breakdown = region_breakdown
+            report.status = 'READY'
+            report.generated_at = timezone.now()
+            report.save()
+        except Exception:
+            logger.exception('Failed to generate cost report', extra={'report_id': report.id, 'user_id': request.user.id})
+            report.status = 'FAILED'
+            report.save(update_fields=['status'])
 
-            report = CostReport.objects.create(
-                user=request.user,
-                report_type=report_type,
-                title=f'{report_type} Report {period_start}',
-                period_start=period_start,
-                period_end=period_end,
-                total_cost=Decimal(str(total_cost)),
-                service_breakdown=service_breakdown,
-                recommendations_count=recommendations_count,
-            )
+        response_data = {
+            'report_id': report.id,
+            'status': report.status,
+            'total_cost': float(report.total_cost or 0),
+            'generated_at': report.generated_at,
+        }
+        if report.status == 'FAILED':
+            response_data['error'] = 'Failed to generate report'
 
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+    def get(self, request, report_id=None):
+        """Get a report by id or list reports."""
+        if report_id:
+            try:
+                report = CostReport.objects.get(id=report_id, user=request.user)
+            except CostReport.DoesNotExist:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
             return Response(
                 {
-                    'report': {
-                        'id': report.id,
-                        'type': report.report_type,
-                        'total_cost': float(report.total_cost),
-                        'generated_at': report.generated_at,
-                    }
+                    'id': report.id,
+                    'type': report.report_type,
+                    'period': f"{report.period_start} to {report.period_end}",
+                    'status': report.status,
+                    'total_cost': float(report.total_cost or 0),
+                    'generated_at': report.generated_at,
                 },
-                status=status.HTTP_201_CREATED,
+                status=status.HTTP_200_OK,
             )
 
-        except (TypeError, ValueError):
-            return Response({'error': 'Invalid report input'}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:
-            return Response({'error': 'Unable to generate report'}, status=status.HTTP_400_BAD_REQUEST)
-
-    def get(self, request):
-        reports = CostReport.objects.filter(user=request.user)
+        reports = CostReport.objects.filter(user=request.user).order_by('-created_at')[:10]
         data = [
             {
                 'id': report.id,
                 'type': report.report_type,
-                'title': report.title,
-                'total_cost': float(report.total_cost),
-                'period': f'{report.period_start} to {report.period_end}',
-                'generated_at': report.generated_at,
+                'period': f"{report.period_start} to {report.period_end}",
+                'status': report.status,
+                'total_cost': float(report.total_cost or 0),
             }
             for report in reports
         ]
-
-        return Response({'reports': data})
+        return Response({'reports': data, 'count': len(data)}, status=status.HTTP_200_OK)
 
 
 class TagCostAllocationView(APIView):
-    """Tag-based cost allocation and tracking."""
+    """View costs grouped by tags."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            provider = request.query_params.get('provider', 'AWS')
-            tag_groups = TagCostGroup.objects.filter(user=request.user, cloud_provider=provider)
+        """
+        Get tag-based cost allocation.
+        GET /api/optimize/tags/?provider=AWS
+        """
+        provider = request.query_params.get('provider', 'AWS')
+        groups = TagCostGroup.objects.filter(
+            user=request.user,
+            cloud_provider=provider,
+        ).order_by('-total_cost')
 
-            data = [
+        data = []
+        total_cost = 0.0
+        for group in groups:
+            cost = float(group.total_cost)
+            data.append(
                 {
-                    'id': tag_group.id,
-                    'tag_key': tag_group.tag_key,
-                    'tag_value': tag_group.tag_value,
-                    'total_cost': float(tag_group.total_cost),
-                    'monthly_cost': float(tag_group.monthly_cost),
-                    'resource_count': tag_group.resource_count,
-                    'services': tag_group.services,
+                    'tag_key': group.tag_key,
+                    'tag_value': group.tag_value,
+                    'cost': cost,
+                    'resource_count': group.resource_count,
+                    'services': group.services,
                 }
-                for tag_group in tag_groups
-            ]
+            )
+            total_cost += cost
 
-            total = sum(float(tag_group.total_cost) for tag_group in tag_groups)
-            return Response({'tag_groups': data, 'total_cost': total, 'count': len(data)})
-
-        except Exception:
-            return Response({'error': 'Unable to fetch tag allocation'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                'tag_groups': data,
+                'total_cost': round(total_cost, 2),
+                'count': len(data),
+            },
+            status=status.HTTP_200_OK,
+        )
