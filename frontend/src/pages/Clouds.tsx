@@ -20,6 +20,11 @@ export const Clouds: React.FC = () => {
     provider: 'AWS',
     aws_access_key: '',
     aws_secret_key: '',
+    azure_client_id: '',
+    azure_client_secret: '',
+    azure_tenant_id: '',
+    azure_subscription_id: '',
+    gcp_service_account_json: '',
   });
 
   useEffect(() => {
@@ -45,13 +50,39 @@ export const Clouds: React.FC = () => {
     setSuccess('');
 
     try {
-      await api.connectCloud(formData.provider, {
-        aws_access_key: formData.aws_access_key,
-        aws_secret_key: formData.aws_secret_key,
-      });
+      let credentials: Record<string, string> = {};
+
+      if (formData.provider === 'AWS') {
+        credentials = {
+          aws_access_key: formData.aws_access_key,
+          aws_secret_key: formData.aws_secret_key,
+        };
+      } else if (formData.provider === 'AZURE') {
+        credentials = {
+          azure_client_id: formData.azure_client_id,
+          azure_client_secret: formData.azure_client_secret,
+          azure_tenant_id: formData.azure_tenant_id,
+          azure_subscription_id: formData.azure_subscription_id,
+        };
+      } else if (formData.provider === 'GCP') {
+        credentials = {
+          gcp_service_account_json: formData.gcp_service_account_json,
+        };
+      }
+
+      await api.connectCloud(formData.provider, credentials);
 
       setSuccess('Cloud connected successfully!');
-      setFormData({ provider: 'AWS', aws_access_key: '', aws_secret_key: '' });
+      setFormData({
+        provider: 'AWS',
+        aws_access_key: '',
+        aws_secret_key: '',
+        azure_client_id: '',
+        azure_client_secret: '',
+        azure_tenant_id: '',
+        azure_subscription_id: '',
+        gcp_service_account_json: '',
+      });
       setShowForm(false);
       fetchClouds();
     } catch (err: any) {
@@ -129,6 +160,59 @@ export const Clouds: React.FC = () => {
                     required
                   />
                 </>
+              )}
+
+              {formData.provider === 'AZURE' && (
+                <>
+                  <Input
+                    label="Client ID"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={formData.azure_client_id}
+                    onChange={(e) => setFormData({ ...formData, azure_client_id: e.target.value })}
+                    required
+                  />
+
+                  <Input
+                    label="Client Secret"
+                    type="password"
+                    placeholder="••••••••••••••••••••••"
+                    value={formData.azure_client_secret}
+                    onChange={(e) => setFormData({ ...formData, azure_client_secret: e.target.value })}
+                    required
+                  />
+
+                  <Input
+                    label="Tenant ID"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={formData.azure_tenant_id}
+                    onChange={(e) => setFormData({ ...formData, azure_tenant_id: e.target.value })}
+                    required
+                  />
+
+                  <Input
+                    label="Subscription ID"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={formData.azure_subscription_id}
+                    onChange={(e) => setFormData({ ...formData, azure_subscription_id: e.target.value })}
+                    required
+                  />
+                </>
+              )}
+
+              {formData.provider === 'GCP' && (
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-semibold mb-2">
+                    Service Account JSON
+                  </label>
+                  <textarea
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
+                    rows={6}
+                    placeholder='Paste your service account JSON here...'
+                    value={formData.gcp_service_account_json}
+                    onChange={(e) => setFormData({ ...formData, gcp_service_account_json: e.target.value })}
+                    required
+                  />
+                </div>
               )}
 
               <div className="flex space-x-3">
