@@ -25,7 +25,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose }) => {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -52,7 +51,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose }) => {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
-    setError('');
 
     try {
       console.log('Sending message to API:', input);
@@ -71,15 +69,19 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose }) => {
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error: any) {
       console.error('Chat error:', error);
-      
+
+      const errorText =
+        error.response?.data?.error ||
+        error.message ||
+        'Unable to reach the server. Please check your connection and try again.';
+
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: `Error: ${error.response?.data?.error || error.message || 'An error occurred. Please try again.'}`,
+        content: `Sorry, I ran into a problem: ${errorText}`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
-      setError(error.response?.data?.error || 'Failed to get response');
     } finally {
       setLoading(false);
     }
@@ -131,13 +133,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ isOpen, onClose }) => {
           <div className="flex justify-start">
             <div className="bg-gray-100 text-gray-900 px-4 py-3 rounded-lg rounded-bl-none">
               <Loader size={16} className="animate-spin" />
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="flex justify-start">
-            <div className="bg-red-100 text-red-900 px-4 py-2 rounded-lg rounded-bl-none text-sm">
-              ⚠️ {error}
             </div>
           </div>
         )}

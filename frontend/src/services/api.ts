@@ -180,9 +180,9 @@ class ApiClient {
   });
   return response.data;
 }
-// Chat with Claude AI
+// Chat with CloudLens AI
 async chatWithAI(message: string) {
-  const response = await this.client.post('/billing/chat/', {
+  const response = await this.client.post('/auth/chat/', {
     message,
   });
   return response.data;
