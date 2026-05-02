@@ -167,7 +167,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                           <Link
                             key={item.path}
                             to={item.path}
-                            onClick={() => { setOpenDropdown(null); setIsMenuOpen(false); }}
+                            onClick={() => setOpenDropdown(null)}
                             className={`flex items-center space-x-2 px-4 py-2 text-sm transition first:rounded-t-lg last:rounded-b-lg ${
                               isActive(item.path)
                                 ? 'bg-primary text-white'

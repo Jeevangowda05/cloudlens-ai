@@ -3,7 +3,10 @@ ChatBot API endpoint for CloudLens AI.
 Uses mock responses with billing context when the AI API is unavailable.
 """
 
+import logging
 import random
+
+import requests as http_requests
 from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -11,6 +14,8 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from api.models import ChatMessage, BillingCache
+
+logger = logging.getLogger(__name__)
 
 
 # Contextual mock responses grouped by topic
@@ -146,8 +151,6 @@ def chat_with_ai(request):
     openrouter_key = getattr(settings, 'OPENROUTER_API_KEY', None)
     if openrouter_key:
         try:
-            import requests as http_requests
-
             context_text = "You are CloudLens AI, an expert cloud cost optimisation assistant.\n\n"
             if billing_context:
                 context_text += "User's Cloud Billing Summary:\n"
@@ -193,8 +196,8 @@ def chat_with_ai(request):
                     'model': 'openrouter-ai',
                     'is_mock': False,
                 }, status=status.HTTP_200_OK)
-        except Exception:
-            pass  # Fall through to mock response
+        except (http_requests.RequestException, KeyError, ValueError) as exc:
+            logger.warning("OpenRouter API call failed, falling back to mock response: %s", exc)
 
     # Fallback: contextual mock response
     mock_text = _get_mock_response(user_message, billing_context)
