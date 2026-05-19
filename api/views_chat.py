@@ -1,10 +1,12 @@
 """
 ChatBot API endpoint for CloudLens AI.
-Uses mock responses with billing context when the AI API is unavailable.
+Uses OpenRouter API for real AI responses, with mock fallback.
+Includes comprehensive debugging for troubleshooting.
 """
 
 import logging
 import random
+import sys
 
 import requests as http_requests
 from django.conf import settings
@@ -149,8 +151,21 @@ def chat_with_ai(request):
 
     # Try live AI via OpenRouter if a key is configured
     openrouter_key = getattr(settings, 'OPENROUTER_API_KEY', None)
+    
+    # DEBUG: Log key availability
+    print("=" * 80)
+    print("[DEBUG] Chat API Called")
+    print(f"[DEBUG] User: {user.email}")
+    print(f"[DEBUG] Message: {user_message}")
+    print(f"[DEBUG] OpenRouter Key Available: {bool(openrouter_key)}")
+    if openrouter_key:
+        print(f"[DEBUG] OpenRouter Key (first 20 chars): {openrouter_key[:20]}...")
+    print("=" * 80)
+    
     if openrouter_key:
         try:
+            print("[DEBUG] Attempting to call OpenRouter API...")
+            
             context_text = "You are CloudLens AI, an expert cloud cost optimisation assistant.\n\n"
             if billing_context:
                 context_text += "User's Cloud Billing Summary:\n"
@@ -165,6 +180,26 @@ def chat_with_ai(request):
                 context_text += "User has not connected any cloud providers yet.\n"
             context_text += f"\nUser question: {user_message}\n\nRespond concisely (2–3 paragraphs max)."
 
+            print(f"[DEBUG] Context prepared. Length: {len(context_text)} chars")
+            
+            # Build request payload
+            payload = {
+                "model": "meta-llama/llama-3-8b-instruct:free",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are CloudLens AI, an expert cloud cost optimisation assistant.",
+                    },
+                    {"role": "user", "content": context_text},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 500,
+            }
+            
+            print("[DEBUG] Sending payload to OpenRouter...")
+            print(f"[DEBUG] Payload model: {payload['model']}")
+            print(f"[DEBUG] Number of messages: {len(payload['messages'])}")
+
             ai_resp = http_requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -172,36 +207,65 @@ def chat_with_ai(request):
                     'Content-Type': 'application/json',
                     'HTTP-Referer': 'http://localhost:3000',
                 },
-                json={
-                    "model": "meta-llama/llama-3-8b-instruct:free",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are CloudLens AI, an expert cloud cost optimisation assistant.",
-                        },
-                        {"role": "user", "content": context_text},
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 500,
-                },
+                json=payload,
                 timeout=30,
             )
 
+            print(f"[DEBUG] OpenRouter Response Status: {ai_resp.status_code}")
+            print(f"[DEBUG] OpenRouter Response Headers: {dict(ai_resp.headers)}")
+            print(f"[DEBUG] OpenRouter Response Body: {ai_resp.text[:500]}...")
+
             if ai_resp.status_code == 200:
-                ai_text = ai_resp.json()['choices'][0]['message']['content']
-                ChatMessage.objects.create(user=user, role='assistant', content=ai_text)
-                return Response({
-                    'response': ai_text,
-                    'billing_summary': billing_context,
-                    'model': 'openrouter-ai',
-                    'is_mock': False,
-                }, status=status.HTTP_200_OK)
-        except (http_requests.RequestException, KeyError, ValueError) as exc:
-            logger.warning("OpenRouter API call failed, falling back to mock response: %s", exc)
+                print("[DEBUG] ✅ SUCCESS! Response status is 200")
+                ai_json = ai_resp.json()
+                print(f"[DEBUG] Response JSON keys: {list(ai_json.keys())}")
+                
+                if 'choices' in ai_json and len(ai_json['choices']) > 0:
+                    ai_text = ai_json['choices'][0]['message']['content']
+                    print(f"[DEBUG] ✅ Extracted AI response: {ai_text[:100]}...")
+                    
+                    ChatMessage.objects.create(user=user, role='assistant', content=ai_text)
+                    
+                    print("[DEBUG] ✅ OpenRouter AI response saved to database")
+                    print("=" * 80)
+                    
+                    return Response({
+                        'response': ai_text,
+                        'billing_summary': billing_context,
+                        'model': 'openrouter-ai',
+                        'is_mock': False,
+                    }, status=status.HTTP_200_OK)
+                else:
+                    print(f"[DEBUG] ❌ No choices in response: {ai_json}")
+                    raise ValueError("No choices in OpenRouter response")
+            else:
+                print(f"[DEBUG] ❌ OpenRouter returned status {ai_resp.status_code}")
+                print(f"[DEBUG] Response: {ai_resp.text}")
+                raise http_requests.RequestException(f"Status {ai_resp.status_code}: {ai_resp.text}")
+                
+        except http_requests.exceptions.Timeout as exc:
+            print(f"[DEBUG] ❌ TIMEOUT ERROR: {exc}")
+            logger.warning(f"OpenRouter timeout: {exc}")
+        except http_requests.exceptions.ConnectionError as exc:
+            print(f"[DEBUG] ❌ CONNECTION ERROR: {exc}")
+            logger.warning(f"OpenRouter connection error: {exc}")
+        except http_requests.RequestException as exc:
+            print(f"[DEBUG] ❌ REQUEST ERROR: {exc}")
+            logger.warning(f"OpenRouter request error: {exc}")
+        except (KeyError, ValueError) as exc:
+            print(f"[DEBUG] ❌ PARSING ERROR: {exc}")
+            logger.warning(f"OpenRouter parsing error: {exc}")
+        except Exception as exc:
+            print(f"[DEBUG] ❌ UNEXPECTED ERROR: {type(exc).__name__}: {exc}")
+            logger.exception("OpenRouter unexpected error")
 
     # Fallback: contextual mock response
+    print("[DEBUG] ⚠️  Using MOCK response (OpenRouter failed or unavailable)")
     mock_text = _get_mock_response(user_message, billing_context)
     ChatMessage.objects.create(user=user, role='assistant', content=mock_text)
+    
+    print(f"[DEBUG] Mock response: {mock_text[:100]}...")
+    print("=" * 80)
 
     return Response({
         'response': mock_text,
