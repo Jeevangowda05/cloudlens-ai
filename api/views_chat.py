@@ -184,7 +184,7 @@ def chat_with_ai(request):
             
             # Build request payload
             payload = {
-                "model": "meta-llama/llama-3-8b-instruct:free",
+                "model": "openai/gpt-4o-mini",
                 "messages": [
                     {
                         "role": "system",
