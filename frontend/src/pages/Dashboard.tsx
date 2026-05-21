@@ -7,13 +7,14 @@ import { Alert } from '../components/Alert';
 import { ChatBox } from '../components/ChatBox';
 import api from '../services/api';
 import { DashboardData } from '../types';
-import { Activity, AlertCircle, Zap, MessageCircle } from 'lucide-react';
+import { Activity, AlertCircle, Zap, MessageCircle, Cloud } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(true);
 
   useEffect(() => {
     fetchDashboard();
@@ -24,10 +25,27 @@ export const Dashboard: React.FC = () => {
       setLoading(true);
       const data = await api.getDashboard();
       setDashboard(data);
+      setIsDemoMode(Boolean((data as any)?.is_mock_mode || (data as any)?.demo_mode || (data as any)?.is_demo));
     } catch (err: any) {
       setError('Failed to load dashboard');
       console.error(err);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSampleAwsAccount = async () => {
+    try {
+      setLoading(true);
+      await api.connectCloud({
+        cloud_provider: 'AWS',
+        aws_access_key: 'demo-access-key',
+        aws_secret_key: 'demo-secret-key',
+      } as any);
+      await fetchDashboard();
+    } catch (err: any) {
+      setError('Failed to load sample AWS account');
+      console.error(err);
       setLoading(false);
     }
   };
@@ -39,10 +57,36 @@ export const Dashboard: React.FC = () => {
       <div className="space-y-8">
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
 
+        {/* Demo mode banner */}
+        {isDemoMode && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+            <Cloud size={22} className="text-amber-600 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-900">Demo tenant – using sample cloud billing data</p>
+              <p className="text-sm text-amber-700 mt-1">
+                This environment is running in demo mode with generated billing data.
+                You can still explore the full dashboard, recommendations, anomaly detection, and chat experience.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Monitor your cloud costs across all providers</p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-600 mt-1">Monitor your cloud costs across all providers</p>
+          </div>
+
+          {isDemoMode && (
+            <button
+              onClick={loadSampleAwsAccount}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-white hover:bg-blue-600 transition"
+            >
+              <Cloud size={18} />
+              Load sample AWS account
+            </button>
+          )}
         </div>
 
         {/* Cost Overview */}
