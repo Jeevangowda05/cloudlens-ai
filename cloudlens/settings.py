@@ -33,6 +33,16 @@ if not DEBUG and SECRET_KEY == 'django-insecure-change-this-in-production':
         "SECRET_KEY must be set in environment when DEBUG is False."
     )
 
+# Demo / mock mode toggle
+# When True, the app uses mock cloud connectors and seeded sample billing data.
+USE_MOCK_CLOUD_APIS = os.getenv('USE_MOCK_CLOUD_APIS', 'True').lower() == 'true'
+DEMO_TENANT_LABEL = os.getenv(
+    'DEMO_TENANT_LABEL',
+    'Demo tenant – using sample cloud billing data'
+)
+DEMO_SAMPLE_PROVIDER = os.getenv('DEMO_SAMPLE_PROVIDER', 'AWS')
+DEMO_SAMPLE_ACCOUNT_LABEL = os.getenv('DEMO_SAMPLE_ACCOUNT_LABEL', 'Sample AWS Account')
+
 # CORS - Allow React frontend
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
@@ -51,7 +61,7 @@ INSTALLED_APPS = [
     
     # Third-party
     'rest_framework',
-    'rest_framework.authtoken',  # ADD THIS LINE
+    'rest_framework.authtoken',
     'corsheaders',
     
     # Our apps
