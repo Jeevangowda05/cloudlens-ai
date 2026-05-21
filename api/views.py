@@ -11,6 +11,7 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.conf import settings
 
 from .serializers import (
     SignupSerializer, LoginSerializer, UserSerializer,
@@ -195,8 +196,37 @@ class ConnectCloudView(APIView):
         
         try:
             provider = serializer.validated_data['cloud_provider']
+
+            # DEMO MODE: create a fake cloud account record
+            if getattr(settings, 'USE_MOCK_CLOUD_APIS', True):
+                credentials, created = CloudCredentials.objects.update_or_create(
+                    user=request.user,
+                    cloud_provider=provider,
+                    defaults={
+                        'encrypted_key_1': 'demo-key-1',
+                        'encrypted_key_2': 'demo-key-2',
+                        'encrypted_key_3': 'demo-key-3',
+                        'additional_data': {
+                            'is_mock': True,
+                            'demo_mode': True,
+                            'demo_label': getattr(settings, 'DEMO_TENANT_LABEL', 'Demo tenant – using sample cloud billing data'),
+                            'sample_account_label': getattr(settings, 'DEMO_SAMPLE_ACCOUNT_LABEL', 'Sample AWS Account'),
+                            'sample_provider': provider,
+                        },
+                        'is_active': True,
+                        'is_verified': True,
+                        'connection_error': '',
+                    }
+                )
+
+                return Response({
+                    'message': f'{provider} demo account loaded successfully',
+                    'credential': CloudCredentialsSerializer(credentials).data,
+                    'is_mock_mode': True,
+                    'demo_label': getattr(settings, 'DEMO_TENANT_LABEL', 'Demo tenant – using sample cloud billing data'),
+                }, status=status.HTTP_201_CREATED)
             
-            # Encrypt credentials
+            # REAL MODE: existing behavior
             if provider == 'AWS':
                 key_1 = encryptor.encrypt(serializer.validated_data['aws_access_key'])
                 key_2 = encryptor.encrypt(serializer.validated_data['aws_secret_key'])
@@ -228,13 +258,15 @@ class ConnectCloudView(APIView):
                     'encrypted_key_2': key_2,
                     'encrypted_key_3': key_3,
                     'additional_data': additional,
-                    'is_active': True
+                    'is_active': True,
+                    'is_verified': True,
                 }
             )
             
             return Response({
                 'message': f'{provider} account connected successfully',
-                'credential': CloudCredentialsSerializer(credentials).data
+                'credential': CloudCredentialsSerializer(credentials).data,
+                'is_mock_mode': False,
             }, status=status.HTTP_201_CREATED)
         
         except Exception as e:
