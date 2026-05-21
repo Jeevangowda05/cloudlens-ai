@@ -7,7 +7,7 @@ import { Alert } from '../components/Alert';
 import { Loading } from '../components/Loading';
 import api from '../services/api';
 import { CloudCredential } from '../types';
-import { Cloud, Plus, Trash2, Check } from 'lucide-react';
+import { Cloud, Plus, Trash2, Check, Sparkles } from 'lucide-react';
 
 export const Clouds: React.FC = () => {
   const [clouds, setClouds] = useState<CloudCredential[]>([]);
@@ -15,6 +15,7 @@ export const Clouds: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(true);
 
   const [formData, setFormData] = useState({
     provider: 'AWS',
@@ -36,6 +37,7 @@ export const Clouds: React.FC = () => {
       setLoading(true);
       const data = await api.listClouds();
       setClouds(data.connected_clouds || []);
+      setIsDemoMode(Boolean((data as any)?.is_mock_mode || (data as any)?.demo_mode || (data as any)?.is_demo));
     } catch (err: any) {
       setError('Failed to load clouds');
       console.error(err);
@@ -90,6 +92,33 @@ export const Clouds: React.FC = () => {
     }
   };
 
+  const loadSampleAccount = async (provider: 'AWS' | 'AZURE' | 'GCP') => {
+    setError('');
+    setSuccess('');
+
+    try {
+      const payload: Record<string, any> = { cloud_provider: provider };
+
+      if (provider === 'AWS') {
+        payload.aws_access_key = 'demo-access-key';
+        payload.aws_secret_key = 'demo-secret-key';
+      } else if (provider === 'AZURE') {
+        payload.azure_client_id = 'demo-client-id';
+        payload.azure_client_secret = 'demo-client-secret';
+        payload.azure_tenant_id = 'demo-tenant-id';
+        payload.azure_subscription_id = 'demo-subscription-id';
+      } else {
+        payload.gcp_service_account_json = '{"demo": true}';
+      }
+
+      await api.connectCloud(provider, payload);
+      setSuccess(`Loaded sample ${provider} account successfully`);
+      await fetchClouds();
+    } catch (err: any) {
+      setError(err.response?.data?.error || `Failed to load sample ${provider} account`);
+    }
+  };
+
   const handleDisconnect = async (provider: string) => {
     if (!window.confirm(`Disconnect ${provider}?`)) return;
 
@@ -107,16 +136,37 @@ export const Clouds: React.FC = () => {
   return (
     <Layout>
       <div className="space-y-8">
+        {/* Demo mode banner */}
+        {isDemoMode && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+            <Sparkles size={22} className="text-amber-600 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-900">Demo tenant – using sample cloud billing data</p>
+              <p className="text-sm text-amber-700 mt-1">
+                This environment is running in demo mode. You can still connect sample cloud accounts and explore the full product flow.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Cloud Providers</h1>
             <p className="text-gray-600 mt-1">Connect and manage your cloud accounts</p>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="flex items-center space-x-2">
-            <Plus size={20} />
-            <span>Connect Cloud</span>
-          </Button>
+          <div className="flex gap-3 flex-wrap">
+            {isDemoMode && (
+              <Button onClick={() => loadSampleAccount('AWS')} className="flex items-center space-x-2">
+                <Sparkles size={18} />
+                <span>Load sample AWS account</span>
+              </Button>
+            )}
+            <Button onClick={() => setShowForm(!showForm)} className="flex items-center space-x-2">
+              <Plus size={20} />
+              <span>Connect Cloud</span>
+            </Button>
+          </div>
         </div>
 
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
@@ -278,6 +328,11 @@ export const Clouds: React.FC = () => {
                       <span className="font-semibold">Connected:</span>{' '}
                       {new Date(cloud.connected_at).toLocaleDateString()}
                     </p>
+                    {(cloud as any)?.additional_data?.is_mock && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+                        Demo / Sample account
+                      </p>
+                    )}
                   </div>
 
                   <Button
