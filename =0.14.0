@@ -1,0 +1,74 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting numpy
+  Using cached numpy-2.4.6-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+Collecting pandas
+  Using cached pandas-3.0.3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (79 kB)
+Collecting scikit-learn
+  Using cached scikit_learn-1.8.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (11 kB)
+Collecting statsmodels
+  Using cached statsmodels-0.14.6-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (9.5 kB)
+Collecting twilio==8.10.0
+  Using cached twilio-8.10.0-py2.py3-none-any.whl.metadata (12 kB)
+Requirement already satisfied: requests>=2.0.0 in /usr/lib/python3/dist-packages (from twilio==8.10.0) (2.31.0)
+Requirement already satisfied: PyJWT<3.0.0,>=2.0.0 in /usr/lib/python3/dist-packages (from twilio==8.10.0) (2.7.0)
+Collecting aiohttp>=3.8.4 (from twilio==8.10.0)
+  Using cached aiohttp-3.13.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.1 kB)
+Collecting aiohttp-retry>=2.8.3 (from twilio==8.10.0)
+  Using cached aiohttp_retry-2.9.1-py3-none-any.whl.metadata (8.8 kB)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/lib/python3/dist-packages (from pandas) (2.8.2)
+Collecting scipy>=1.10.0 (from scikit-learn)
+  Using cached scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+Collecting joblib>=1.3.0 (from scikit-learn)
+  Using cached joblib-1.5.3-py3-none-any.whl.metadata (5.5 kB)
+Collecting threadpoolctl>=3.2.0 (from scikit-learn)
+  Using cached threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB)
+Collecting patsy>=0.5.6 (from statsmodels)
+  Using cached patsy-1.0.2-py2.py3-none-any.whl.metadata (3.6 kB)
+Requirement already satisfied: packaging>=21.3 in /usr/lib/python3/dist-packages (from statsmodels) (24.0)
+Collecting aiohappyeyeballs>=2.5.0 (from aiohttp>=3.8.4->twilio==8.10.0)
+  Using cached aiohappyeyeballs-2.6.2-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiosignal>=1.4.0 (from aiohttp>=3.8.4->twilio==8.10.0)
+  Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Requirement already satisfied: attrs>=17.3.0 in /usr/lib/python3/dist-packages (from aiohttp>=3.8.4->twilio==8.10.0) (23.2.0)
+Collecting frozenlist>=1.1.1 (from aiohttp>=3.8.4->twilio==8.10.0)
+  Using cached frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+Collecting multidict<7.0,>=4.5 (from aiohttp>=3.8.4->twilio==8.10.0)
+  Using cached multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+Collecting propcache>=0.2.0 (from aiohttp>=3.8.4->twilio==8.10.0)
+  Using cached propcache-0.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (16 kB)
+Collecting yarl<2.0,>=1.17.0 (from aiohttp>=3.8.4->twilio==8.10.0)
+  Using cached yarl-1.24.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (94 kB)
+Requirement already satisfied: typing-extensions>=4.2 in /home/runner/.local/lib/python3.12/site-packages (from aiosignal>=1.4.0->aiohttp>=3.8.4->twilio==8.10.0) (4.15.0)
+Requirement already satisfied: idna>=2.0 in /usr/lib/python3/dist-packages (from yarl<2.0,>=1.17.0->aiohttp>=3.8.4->twilio==8.10.0) (3.6)
+Downloading twilio-8.10.0-py2.py3-none-any.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 174.2 MB/s eta 0:00:00
+Downloading numpy-2.4.6-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.6/16.6 MB 144.1 MB/s eta 0:00:00
+Downloading pandas-3.0.3-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (10.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.9/10.9 MB 174.5 MB/s eta 0:00:00
+Downloading scikit_learn-1.8.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (8.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.9/8.9 MB 151.0 MB/s eta 0:00:00
+Downloading statsmodels-0.14.6-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (10.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.3/10.3 MB 182.2 MB/s eta 0:00:00
+Downloading aiohttp-3.13.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 185.4 MB/s eta 0:00:00
+Downloading aiohttp_retry-2.9.1-py3-none-any.whl (10.0 kB)
+Downloading joblib-1.5.3-py3-none-any.whl (309 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 309.1/309.1 kB 100.8 MB/s eta 0:00:00
+Downloading patsy-1.0.2-py2.py3-none-any.whl (233 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 233.3/233.3 kB 84.8 MB/s eta 0:00:00
+Downloading scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.2/35.2 MB 121.7 MB/s eta 0:00:00
+Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB)
+Downloading aiohappyeyeballs-2.6.2-py3-none-any.whl (15 kB)
+Downloading aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+Downloading frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (242 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 242.4/242.4 kB 87.6 MB/s eta 0:00:00
+Downloading multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (256 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 256.3/256.3 kB 87.8 MB/s eta 0:00:00
+Downloading propcache-0.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (61 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.6/61.6 kB 26.3 MB/s eta 0:00:00
+Downloading yarl-1.24.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (105 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 105.6/105.6 kB 42.6 MB/s eta 0:00:00
+Installing collected packages: threadpoolctl, propcache, numpy, multidict, joblib, frozenlist, aiohappyeyeballs, yarl, scipy, patsy, pandas, aiosignal, statsmodels, scikit-learn, aiohttp, aiohttp-retry, twilio
+Successfully installed aiohappyeyeballs-2.6.2 aiohttp-3.13.5 aiohttp-retry-2.9.1 aiosignal-1.4.0 frozenlist-1.8.0 joblib-1.5.3 multidict-6.7.1 numpy-2.4.6 pandas-3.0.3 patsy-1.0.2 propcache-0.5.2 scikit-learn-1.8.0 scipy-1.17.1 statsmodels-0.14.6 threadpoolctl-3.6.0 twilio-8.10.0 yarl-1.24.2
