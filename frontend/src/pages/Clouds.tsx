@@ -7,13 +7,35 @@ import { Alert } from '../components/Alert';
 import { Loading } from '../components/Loading';
 import api from '../services/api';
 import { CloudCredential } from '../types';
-import { Cloud, Plus, Trash2, Check } from 'lucide-react';
+import { Cloud, Plus, Trash2, Check, FlaskConical } from 'lucide-react';
+
+const isDemoCloud = (cloud: CloudCredential | any): boolean => {
+  return Boolean(
+    cloud?.is_mock_mode ||
+    cloud?.demo_mode ||
+    cloud?.is_demo ||
+    cloud?.additional_data?.is_mock ||
+    cloud?.additional_data?.demo_mode ||
+    cloud?.additional_data?.is_demo
+  );
+};
+
+const isDemoResponse = (payload: any): boolean => {
+  return Boolean(
+    payload?.is_mock_mode ||
+    payload?.demo_mode ||
+    payload?.is_demo ||
+    (Array.isArray(payload?.connected_clouds) && payload.connected_clouds.some(isDemoCloud))
+  );
+};
 
 export const Clouds: React.FC = () => {
   const [clouds, setClouds] = useState<CloudCredential[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -36,6 +58,7 @@ export const Clouds: React.FC = () => {
       setLoading(true);
       const data = await api.listClouds();
       setClouds(data.connected_clouds || []);
+      setIsDemoMode(isDemoResponse(data));
     } catch (err: any) {
       setError('Failed to load clouds');
       console.error(err);
@@ -102,6 +125,24 @@ export const Clouds: React.FC = () => {
     }
   };
 
+  const handleLoadSampleAws = async () => {
+    try {
+      setSampleLoading(true);
+      setError('');
+      setSuccess('');
+      await api.connectCloud('AWS', {
+        aws_access_key: 'demo-access-key',
+        aws_secret_key: 'demo-secret-key',
+      });
+      setSuccess('Sample AWS account loaded successfully!');
+      await fetchClouds();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to load sample AWS account');
+    } finally {
+      setSampleLoading(false);
+    }
+  };
+
   if (loading) return <Layout><Loading /></Layout>;
 
   return (
@@ -121,6 +162,23 @@ export const Clouds: React.FC = () => {
 
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
         {success && <Alert type="success" message={success} onClose={() => setSuccess('')} />}
+
+        {isDemoMode && (
+          <Alert
+            type="info"
+            message={
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="flex items-center space-x-2">
+                  <FlaskConical size={16} />
+                  <span className="font-semibold">Demo mode active: connected providers may be sample accounts.</span>
+                </div>
+                <Button onClick={handleLoadSampleAws} disabled={sampleLoading} className="w-full md:w-auto">
+                  {sampleLoading ? 'Loading sample AWS account...' : 'Load sample AWS account'}
+                </Button>
+              </div>
+            }
+          />
+        )}
 
         {/* Connection Form */}
         {showForm && (
@@ -262,6 +320,14 @@ export const Clouds: React.FC = () => {
                       {cloud.is_active ? 'Active' : 'Inactive'}
                     </div>
                   </div>
+
+                  {isDemoCloud(cloud) && (
+                    <div className="mb-4">
+                      <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                        Demo / Sample account
+                      </span>
+                    </div>
+                  )}
 
                   <div className="space-y-2 mb-4 text-sm">
                     <p className="text-gray-600">

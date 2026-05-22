@@ -79,18 +79,28 @@ class CloudCredentialsSerializer(serializers.ModelSerializer):
         source='get_cloud_provider_display',
         read_only=True
     )
+    is_mock_mode = serializers.SerializerMethodField()
     
     class Meta:
         model = CloudCredentials
         fields = [
             'id', 'cloud_provider', 'cloud_provider_display',
             'is_active', 'is_verified', 'connection_error',
-            'connected_at', 'last_tested_at', 'last_used_at'
+            'connected_at', 'last_tested_at', 'last_used_at',
+            'is_mock_mode'
         ]
         read_only_fields = [
             'id', 'connected_at', 'last_tested_at', 'last_used_at',
             'is_verified', 'connection_error'
         ]
+
+    def get_is_mock_mode(self, obj):
+        data = obj.additional_data or {}
+        return bool(
+            data.get('is_mock') or
+            data.get('demo_mode') or
+            data.get('is_demo')
+        )
 
 
 class CloudCredentialsCreateSerializer(serializers.Serializer):

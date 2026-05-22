@@ -14,6 +14,15 @@ export interface CloudCredential {
   is_verified: boolean;
   connected_at: string;
   last_used_at: string;
+  is_mock_mode?: boolean;
+  demo_mode?: boolean;
+  is_demo?: boolean;
+  additional_data?: {
+    is_mock?: boolean;
+    demo_mode?: boolean;
+    is_demo?: boolean;
+    [key: string]: any;
+  };
 }
 
 export interface BillingData {
