@@ -202,6 +202,14 @@ class ConnectCloudView(APIView):
                 key_2 = encryptor.encrypt(serializer.validated_data['aws_secret_key'])
                 key_3 = ''
                 additional = {}
+                if (
+                    serializer.validated_data['aws_access_key'] == 'demo-access-key' and
+                    serializer.validated_data['aws_secret_key'] == 'demo-secret-key'
+                ):
+                    additional = {
+                        'is_mock': True,
+                        'demo_mode': True
+                    }
             
             elif provider == 'AZURE':
                 key_1 = encryptor.encrypt(serializer.validated_data['azure_client_id'])
@@ -255,7 +263,8 @@ class ListConnectedCloudsView(APIView):
         
         return Response({
             'connected_clouds': serializer.data,
-            'count': credentials.count()
+            'count': credentials.count(),
+            'is_mock_mode': any(item.get('is_mock_mode') for item in serializer.data)
         }, status=status.HTTP_200_OK)
 
 

@@ -172,7 +172,7 @@ class DashboardView(APIView):
         GET /api/billing/dashboard/
         """
         try:
-            from api.models import BillingCache
+            from api.models import BillingCache, CloudCredentials
             
             # Get all cloud data
             caches = BillingCache.objects.filter(user=request.user)
@@ -213,13 +213,24 @@ class DashboardView(APIView):
                     'status': alert.status,
                     'triggered_at': alert.triggered_at
                 })
+
+            credentials = CloudCredentials.objects.filter(user=request.user)
+            is_mock_mode = any(
+                (
+                    (cred.additional_data or {}).get('is_mock') or
+                    (cred.additional_data or {}).get('demo_mode') or
+                    (cred.additional_data or {}).get('is_demo')
+                )
+                for cred in credentials
+            )
             
             return Response({
                 'total_cost': round(total_cost, 2),
                 'clouds': clouds_data,
                 'active_recommendations': active_recs,
                 'recent_alerts': alerts_data,
-                'clouds_connected': len(clouds_data)
+                'clouds_connected': len(clouds_data),
+                'is_mock_mode': is_mock_mode
             }, status=status.HTTP_200_OK)
         
         except Exception as e:

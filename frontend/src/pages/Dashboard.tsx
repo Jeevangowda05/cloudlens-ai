@@ -2,18 +2,42 @@ import React, { useEffect, useState } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { CostCard } from '../components/CostCard';
+import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { Alert } from '../components/Alert';
 import { ChatBox } from '../components/ChatBox';
 import api from '../services/api';
 import { DashboardData } from '../types';
-import { Activity, AlertCircle, Zap, MessageCircle } from 'lucide-react';
+import { Activity, AlertCircle, Zap, MessageCircle, FlaskConical } from 'lucide-react';
+
+const isDemoCloud = (cloud: any): boolean => {
+  return Boolean(
+    cloud?.is_mock_mode ||
+    cloud?.demo_mode ||
+    cloud?.is_demo ||
+    cloud?.additional_data?.is_mock ||
+    cloud?.additional_data?.demo_mode ||
+    cloud?.additional_data?.is_demo
+  );
+};
+
+const isDemoResponse = (payload: any): boolean => {
+  return Boolean(
+    payload?.is_mock_mode ||
+    payload?.demo_mode ||
+    payload?.is_demo ||
+    (Array.isArray(payload?.connected_clouds) && payload.connected_clouds.some(isDemoCloud))
+  );
+};
 
 export const Dashboard: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -22,13 +46,35 @@ export const Dashboard: React.FC = () => {
   const fetchDashboard = async () => {
     try {
       setLoading(true);
-      const data = await api.getDashboard();
-      setDashboard(data);
+      const [dashboardData, cloudsData] = await Promise.all([
+        api.getDashboard(),
+        api.listClouds().catch(() => null),
+      ]);
+      setDashboard(dashboardData);
+      setIsDemoMode(isDemoResponse(dashboardData) || isDemoResponse(cloudsData));
     } catch (err: any) {
       setError('Failed to load dashboard');
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLoadSampleAws = async () => {
+    try {
+      setSampleLoading(true);
+      setError('');
+      setSuccess('');
+      await api.connectCloud('AWS', {
+        aws_access_key: 'demo-access-key',
+        aws_secret_key: 'demo-secret-key',
+      });
+      setSuccess('Sample AWS account loaded successfully');
+      await fetchDashboard();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to load sample AWS account');
+    } finally {
+      setSampleLoading(false);
     }
   };
 
@@ -38,6 +84,24 @@ export const Dashboard: React.FC = () => {
     <Layout>
       <div className="space-y-8">
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
+        {success && <Alert type="success" message={success} onClose={() => setSuccess('')} />}
+
+        {isDemoMode && (
+          <Alert
+            type="info"
+            message={
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="flex items-center space-x-2">
+                  <FlaskConical size={16} />
+                  <span className="font-semibold">Demo mode active: showing sample cloud and billing data.</span>
+                </div>
+                <Button onClick={handleLoadSampleAws} disabled={sampleLoading} className="w-full md:w-auto">
+                  {sampleLoading ? 'Loading sample AWS account...' : 'Load sample AWS account'}
+                </Button>
+              </div>
+            }
+          />
+        )}
 
         {/* Header */}
         <div>
