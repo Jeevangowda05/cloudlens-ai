@@ -1,34 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { Alert } from '../components/Alert';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import api from '../services/api';
 import { Recommendation } from '../types';
-import { Lightbulb, DollarSign, TrendingDown, Zap } from 'lucide-react';
+import { Lightbulb, DollarSign, TrendingDown, Zap, RefreshCw } from 'lucide-react';
 
 export const Recommendations: React.FC = () => {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [totalSavings, setTotalSavings] = useState(0);
+  const [providerFilter, setProviderFilter] = useState('ALL');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    fetchRecommendations();
-  }, []);
-
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.getRecommendations();
+      const data = await api.getRecommendations(providerFilter === 'ALL' ? undefined : providerFilter);
       setRecommendations(data.recommendations || []);
       setTotalSavings(data.total_potential_savings_monthly || 0);
+      setLastSyncedAt(new Date());
     } catch (err: any) {
       setError('Failed to load recommendations');
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }, [providerFilter]);
+
+  useEffect(() => {
+    fetchRecommendations();
+  }, [fetchRecommendations]);
+
+  const handleRefresh = async () => {
+    try {
+      setSyncing(true);
+      await fetchRecommendations();
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -44,9 +59,28 @@ export const Recommendations: React.FC = () => {
     <Layout>
       <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Recommendations</h1>
-          <p className="text-gray-600 mt-1">Optimize your cloud costs with AI-driven insights</p>
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">AI Recommendations</h1>
+            <p className="text-gray-600 mt-1">Optimize your cloud costs with AI-driven insights</p>
+            <FreshnessIndicator timestamp={lastSyncedAt} isSyncing={syncing} />
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={providerFilter}
+              onChange={(e) => setProviderFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="ALL">All Providers</option>
+              <option value="AWS">AWS</option>
+              <option value="AZURE">Azure</option>
+              <option value="GCP">GCP</option>
+            </select>
+            <Button onClick={handleRefresh} disabled={syncing} className="flex items-center space-x-2">
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              <span>{syncing ? 'Refreshing...' : 'Refresh'}</span>
+            </Button>
+          </div>
         </div>
 
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
@@ -91,7 +125,9 @@ export const Recommendations: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="text-gray-600 text-sm">Cloud Provider</p>
-                    <p className="text-lg font-semibold text-gray-900">{rec.cloud_provider}</p>
+                    <div className="mt-1">
+                      <ProviderBadge provider={rec.cloud_provider} />
+                    </div>
                   </div>
                   <div>
                     <p className="text-gray-600 text-sm flex items-center space-x-1">

@@ -5,9 +5,12 @@ import { Button } from '../components/Button';
 import { CostCard } from '../components/CostCard';
 import { Loading } from '../components/Loading';
 import { Alert } from '../components/Alert';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import api from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { TrendingUp, RefreshCw } from 'lucide-react';
+import { getProviderMeta } from '../utils/multicloud';
 
 interface BillingSummary {
   total_cost: number;
@@ -34,6 +37,7 @@ export const Billing: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -44,6 +48,7 @@ export const Billing: React.FC = () => {
       ]);
       setSummary(summaryData);
       setHistory(historyData);
+      setLastSyncedAt(new Date());
     } catch (err: any) {
       setError('Failed to load billing data');
       console.error(err);
@@ -102,10 +107,14 @@ export const Billing: React.FC = () => {
     <Layout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Billing & Analytics</h1>
             <p className="text-gray-600 mt-1">Detailed cost analysis and trends</p>
+            <div className="flex items-center gap-2 mt-2">
+              <ProviderBadge provider={provider} />
+              <FreshnessIndicator timestamp={lastSyncedAt} isSyncing={syncing} />
+            </div>
           </div>
           <Button
             onClick={handleSync}
@@ -133,6 +142,9 @@ export const Billing: React.FC = () => {
               <option value="GCP">GCP</option>
             </select>
           </div>
+          <p className="text-sm text-gray-500">
+            Multi-cloud view: {getProviderMeta(provider).label} services include {getProviderMeta(provider).services.join(', ')}.
+          </p>
 
           <div>
             <label className="block text-gray-700 font-semibold mb-2">Period (Days)</label>

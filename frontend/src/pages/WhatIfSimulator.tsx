@@ -2,23 +2,30 @@ import React, { useMemo, useState } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import { FlaskConical, DollarSign, TrendingDown } from 'lucide-react';
+import { getProviderMultiplier } from '../utils/multicloud';
 
 export const WhatIfSimulator: React.FC = () => {
   const [monthlyCost, setMonthlyCost] = useState(4200);
   const [rightsizingPercent, setRightsizingPercent] = useState(10);
   const [reservedSavingsPercent, setReservedSavingsPercent] = useState(18);
+  const [provider, setProvider] = useState('AWS');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
 
   const scenario = useMemo(() => {
-    const rightsizedCost = monthlyCost * (1 - rightsizingPercent / 100);
+    const baseline = monthlyCost * getProviderMultiplier(provider);
+    const rightsizedCost = baseline * (1 - rightsizingPercent / 100);
     const finalCost = rightsizedCost * (1 - reservedSavingsPercent / 100);
-    const monthlySavings = monthlyCost - finalCost;
+    const monthlySavings = baseline - finalCost;
     return {
       projectedMonthly: finalCost,
       monthlySavings,
       yearlySavings: monthlySavings * 12,
+      baseline,
     };
-  }, [monthlyCost, rightsizingPercent, reservedSavingsPercent]);
+  }, [monthlyCost, provider, rightsizingPercent, reservedSavingsPercent]);
 
   return (
     <Layout>
@@ -29,10 +36,29 @@ export const WhatIfSimulator: React.FC = () => {
             <span>What-If Simulator</span>
           </h1>
           <p className="text-gray-600 mt-1">Test cost changes before implementation</p>
+          <div className="mt-2 flex items-center gap-2">
+            <ProviderBadge provider={provider} />
+            <FreshnessIndicator timestamp={lastSyncedAt} />
+          </div>
         </div>
 
         <Card>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Cloud Provider</label>
+              <select
+                value={provider}
+                onChange={(e) => {
+                  setProvider(e.target.value);
+                  setLastSyncedAt(new Date());
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="AWS">AWS</option>
+                <option value="AZURE">Azure</option>
+                <option value="GCP">GCP</option>
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Current Monthly Cost ($)</label>
               <input
@@ -70,6 +96,8 @@ export const WhatIfSimulator: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
+            <p className="text-xs text-gray-500">Provider-adjusted baseline</p>
+            <p className="text-sm font-semibold text-gray-700 mt-1">${scenario.baseline.toFixed(2)}</p>
             <p className="text-sm text-gray-600">Projected Monthly Cost</p>
             <p className="text-3xl font-bold text-gray-900 mt-2">${scenario.projectedMonthly.toFixed(2)}</p>
           </Card>

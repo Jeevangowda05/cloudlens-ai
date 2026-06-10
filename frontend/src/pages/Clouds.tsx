@@ -5,9 +5,12 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Alert } from '../components/Alert';
 import { Loading } from '../components/Loading';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import api from '../services/api';
 import { CloudCredential } from '../types';
-import { Cloud, Plus, Trash2, Check, FlaskConical } from 'lucide-react';
+import { Cloud, Plus, Trash2, Check, FlaskConical, RefreshCw } from 'lucide-react';
+import { getProviderMeta } from '../utils/multicloud';
 
 const isDemoCloud = (cloud: CloudCredential | any): boolean => {
   return Boolean(
@@ -37,6 +40,8 @@ export const Clouds: React.FC = () => {
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const [formData, setFormData] = useState({
     provider: 'AWS',
@@ -59,6 +64,7 @@ export const Clouds: React.FC = () => {
       const data = await api.listClouds();
       setClouds(data.connected_clouds || []);
       setIsDemoMode(isDemoResponse(data));
+      setLastSyncedAt(new Date());
     } catch (err: any) {
       setError('Failed to load clouds');
       console.error(err);
@@ -143,21 +149,40 @@ export const Clouds: React.FC = () => {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      setSyncing(true);
+      await fetchClouds();
+      setSuccess('Provider statuses refreshed.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to refresh providers');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (loading) return <Layout><Loading /></Layout>;
 
   return (
     <Layout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Cloud Providers</h1>
             <p className="text-gray-600 mt-1">Connect and manage your cloud accounts</p>
+            <FreshnessIndicator timestamp={lastSyncedAt} isSyncing={syncing} />
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="flex items-center space-x-2">
-            <Plus size={20} />
-            <span>Connect Cloud</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleRefresh} disabled={syncing} className="flex items-center space-x-2">
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              <span>{syncing ? 'Refreshing...' : 'Refresh Status'}</span>
+            </Button>
+            <Button onClick={() => setShowForm(!showForm)} className="flex items-center space-x-2">
+              <Plus size={20} />
+              <span>Connect Cloud</span>
+            </Button>
+          </div>
         </div>
 
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
@@ -307,9 +332,12 @@ export const Clouds: React.FC = () => {
                 <Card key={cloud.id}>
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {cloud.cloud_provider_display}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {cloud.cloud_provider_display}
+                        </h3>
+                        <ProviderBadge provider={cloud.cloud_provider} />
+                      </div>
                       <p className="text-sm text-gray-600">{cloud.cloud_provider}</p>
                     </div>
                     <div className={`px-2 py-1 rounded text-xs font-semibold ${
@@ -343,6 +371,13 @@ export const Clouds: React.FC = () => {
                     <p className="text-gray-600">
                       <span className="font-semibold">Connected:</span>{' '}
                       {new Date(cloud.connected_at).toLocaleDateString()}
+                    </p>
+                    <FreshnessIndicator
+                      timestamp={cloud.last_used_at || cloud.connected_at}
+                      isFresh={cloud.is_active}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Core services: {getProviderMeta(cloud.cloud_provider).services.join(', ')}
                     </p>
                   </div>
 

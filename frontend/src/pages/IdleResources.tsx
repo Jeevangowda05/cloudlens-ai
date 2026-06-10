@@ -3,7 +3,10 @@ import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Alert } from '../components/Alert';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import { AlertTriangle, DollarSign, Server, Database, HardDrive } from 'lucide-react';
+import { getProviderMeta, getProviderMultiplier } from '../utils/multicloud';
 
 type ResourceType = 'EC2' | 'RDS' | 'Storage';
 
@@ -34,9 +37,18 @@ export const IdleResources: React.FC = () => {
   const [resourceTypeFilter, setResourceTypeFilter] = useState<'All' | ResourceType>('All');
   const [sortBy, setSortBy] = useState<'cost' | 'idleDuration'>('cost');
   const [message, setMessage] = useState('');
+  const [provider, setProvider] = useState('AWS');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
 
   const filteredResources = useMemo(() => {
-    const resources = idleResources.filter((resource) => (
+    const multiplier = getProviderMultiplier(provider);
+    const providerResources = idleResources.map((resource) => ({
+      ...resource,
+      monthlyCost: Number((resource.monthlyCost * multiplier).toFixed(2)),
+      name: provider === 'AWS' ? resource.name : `${provider.toLowerCase()}-${resource.name}`,
+    }));
+
+    const resources = providerResources.filter((resource) => (
       resourceTypeFilter === 'All' ? true : resource.type === resourceTypeFilter
     ));
 
@@ -45,7 +57,7 @@ export const IdleResources: React.FC = () => {
         ? b.monthlyCost - a.monthlyCost
         : b.idleDurationDays - a.idleDurationDays
     ));
-  }, [resourceTypeFilter, sortBy]);
+  }, [provider, resourceTypeFilter, sortBy]);
 
   const totalSavings = filteredResources.reduce((acc, resource) => acc + resource.monthlyCost, 0);
 
@@ -64,6 +76,10 @@ export const IdleResources: React.FC = () => {
             <span>Idle Resources</span>
           </h1>
           <p className="text-gray-600 mt-1">Identify underutilized resources and reduce unnecessary spend</p>
+          <div className="mt-2 flex items-center gap-2">
+            <ProviderBadge provider={provider} />
+            <FreshnessIndicator timestamp={lastSyncedAt} />
+          </div>
         </div>
 
         {message && <Alert type="success" message={message} onClose={() => setMessage('')} />}
@@ -98,6 +114,22 @@ export const IdleResources: React.FC = () => {
         <Card>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
+              <label className="block text-gray-700 font-semibold mb-2">Cloud Provider</label>
+              <select
+                value={provider}
+                onChange={(e) => {
+                  setProvider(e.target.value);
+                  setLastSyncedAt(new Date());
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="AWS">AWS</option>
+                <option value="AZURE">Azure</option>
+                <option value="GCP">GCP</option>
+              </select>
+            </div>
+
+            <div>
               <label className="block text-gray-700 font-semibold mb-2">Filter by Resource Type</label>
               <select
                 value={resourceTypeFilter}
@@ -123,6 +155,9 @@ export const IdleResources: React.FC = () => {
               </select>
             </div>
           </div>
+          <p className="text-xs text-gray-500 mt-3">
+            Provider-aware service focus: {getProviderMeta(provider).services.join(', ')}
+          </p>
         </Card>
 
         <div className="space-y-4">

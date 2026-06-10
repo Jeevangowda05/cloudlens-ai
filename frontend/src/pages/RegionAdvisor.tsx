@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import { MapPin, TrendingDown } from 'lucide-react';
 
 type RegionOption = {
@@ -11,16 +13,35 @@ type RegionOption = {
   carbonProfile: 'Low' | 'Medium' | 'High';
 };
 
-const regionOptions: RegionOption[] = [
-  { code: 'us-east-1', name: 'US East (N. Virginia)', monthlyCost: 420, carbonProfile: 'Medium' },
-  { code: 'us-west-2', name: 'US West (Oregon)', monthlyCost: 395, carbonProfile: 'Low' },
-  { code: 'eu-west-1', name: 'EU (Ireland)', monthlyCost: 438, carbonProfile: 'Low' },
-  { code: 'ap-south-1', name: 'Asia Pacific (Mumbai)', monthlyCost: 465, carbonProfile: 'High' },
-  { code: 'eu-north-1', name: 'EU (Stockholm)', monthlyCost: 384, carbonProfile: 'Low' },
-];
+const providerRegionOptions: Record<string, RegionOption[]> = {
+  AWS: [
+    { code: 'us-east-1', name: 'US East (N. Virginia)', monthlyCost: 420, carbonProfile: 'Medium' },
+    { code: 'us-west-2', name: 'US West (Oregon)', monthlyCost: 395, carbonProfile: 'Low' },
+    { code: 'eu-west-1', name: 'EU (Ireland)', monthlyCost: 438, carbonProfile: 'Low' },
+    { code: 'ap-south-1', name: 'Asia Pacific (Mumbai)', monthlyCost: 465, carbonProfile: 'High' },
+    { code: 'eu-north-1', name: 'EU (Stockholm)', monthlyCost: 384, carbonProfile: 'Low' },
+  ],
+  AZURE: [
+    { code: 'eastus', name: 'East US', monthlyCost: 402, carbonProfile: 'Medium' },
+    { code: 'westus2', name: 'West US 2', monthlyCost: 377, carbonProfile: 'Low' },
+    { code: 'westeurope', name: 'West Europe', monthlyCost: 425, carbonProfile: 'Low' },
+    { code: 'centralindia', name: 'Central India', monthlyCost: 448, carbonProfile: 'High' },
+    { code: 'northeurope', name: 'North Europe', monthlyCost: 369, carbonProfile: 'Low' },
+  ],
+  GCP: [
+    { code: 'us-central1', name: 'US Central (Iowa)', monthlyCost: 389, carbonProfile: 'Low' },
+    { code: 'us-west1', name: 'US West (Oregon)', monthlyCost: 375, carbonProfile: 'Low' },
+    { code: 'europe-west1', name: 'Europe West (Belgium)', monthlyCost: 414, carbonProfile: 'Low' },
+    { code: 'asia-south1', name: 'Asia South (Mumbai)', monthlyCost: 451, carbonProfile: 'High' },
+    { code: 'europe-north1', name: 'Europe North (Finland)', monthlyCost: 363, carbonProfile: 'Low' },
+  ],
+};
 
 export const RegionAdvisor: React.FC = () => {
+  const [provider, setProvider] = useState('AWS');
   const [currentRegion, setCurrentRegion] = useState('ap-south-1');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
+  const regionOptions = providerRegionOptions[provider];
 
   const current = regionOptions.find((region) => region.code === currentRegion) || regionOptions[0];
 
@@ -32,7 +53,7 @@ export const RegionAdvisor: React.FC = () => {
           monthlySavings: current.monthlyCost - region.monthlyCost,
         }))
         .sort((a, b) => b.monthlySavings - a.monthlySavings),
-    [current.monthlyCost]
+    [current.monthlyCost, regionOptions]
   );
 
   const bestOption = rankedRegions[0];
@@ -46,13 +67,35 @@ export const RegionAdvisor: React.FC = () => {
             <span>Region Advisor</span>
           </h1>
           <p className="text-gray-600 mt-1">Find cheaper cloud regions for workloads</p>
+          <div className="mt-2 flex items-center gap-2">
+            <ProviderBadge provider={provider} />
+            <FreshnessIndicator timestamp={lastSyncedAt} />
+          </div>
         </div>
 
         <Card>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Cloud Provider</label>
+          <select
+            value={provider}
+            onChange={(e) => {
+              const nextProvider = e.target.value;
+              setProvider(nextProvider);
+              setCurrentRegion(providerRegionOptions[nextProvider][0].code);
+              setLastSyncedAt(new Date());
+            }}
+            className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary mb-4"
+          >
+            <option value="AWS">AWS</option>
+            <option value="AZURE">Azure</option>
+            <option value="GCP">GCP</option>
+          </select>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Current Region</label>
           <select
             value={currentRegion}
-            onChange={(e) => setCurrentRegion(e.target.value)}
+            onChange={(e) => {
+              setCurrentRegion(e.target.value);
+              setLastSyncedAt(new Date());
+            }}
             className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
           >
             {regionOptions.map((region) => (

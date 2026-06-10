@@ -53,7 +53,13 @@ describe('CostForecasting', () => {
   it('shows detected anomaly entries from historical spend', () => {
     render(<CostForecasting />);
     expect(screen.getByText('Potential Anomalies Found: 1')).toBeInTheDocument();
-    expect(screen.getByText('Jan 26')).toBeInTheDocument();
+    expect(screen.getByText('Mar 26')).toBeInTheDocument();
+  });
+
+  it('updates forecasting context when provider selection changes', () => {
+    render(<CostForecasting />);
+    fireEvent.change(screen.getByLabelText('Cloud Provider'), { target: { value: 'GCP' } });
+    expect(screen.getByText('Compute Engine, Cloud SQL, Cloud Storage')).toBeInTheDocument();
   });
 
   it('updates scenario analysis text when growth slider changes', () => {

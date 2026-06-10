@@ -6,9 +6,12 @@ import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { Alert } from '../components/Alert';
 import { ChatBox } from '../components/ChatBox';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import api from '../services/api';
 import { DashboardData } from '../types';
-import { Activity, AlertCircle, Zap, MessageCircle, FlaskConical } from 'lucide-react';
+import { Activity, AlertCircle, Zap, MessageCircle, FlaskConical, RefreshCw } from 'lucide-react';
+import { getProviderMeta } from '../utils/multicloud';
 
 const isDemoCloud = (cloud: any): boolean => {
   return Boolean(
@@ -38,6 +41,8 @@ export const Dashboard: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [sampleLoading, setSampleLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchDashboard();
@@ -52,6 +57,7 @@ export const Dashboard: React.FC = () => {
       ]);
       setDashboard(dashboardData);
       setIsDemoMode(isDemoResponse(dashboardData) || isDemoResponse(cloudsData));
+      setLastSyncedAt(new Date());
     } catch (err: any) {
       setError('Failed to load dashboard');
       console.error(err);
@@ -75,6 +81,18 @@ export const Dashboard: React.FC = () => {
       setError(err.response?.data?.error || 'Failed to load sample AWS account');
     } finally {
       setSampleLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setSyncing(true);
+      await fetchDashboard();
+      setSuccess('Dashboard refreshed with latest cloud usage snapshot.');
+    } catch (err) {
+      setError('Failed to refresh dashboard');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -104,9 +122,16 @@ export const Dashboard: React.FC = () => {
         )}
 
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Monitor your cloud costs across all providers</p>
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-600 mt-1">Monitor your cloud costs across all providers</p>
+            <FreshnessIndicator timestamp={lastSyncedAt} isSyncing={syncing} />
+          </div>
+          <Button onClick={handleRefresh} disabled={syncing} className="flex items-center space-x-2">
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+            <span>{syncing ? 'Refreshing...' : 'Refresh Snapshot'}</span>
+          </Button>
         </div>
 
         {/* Cost Overview */}
@@ -145,15 +170,17 @@ export const Dashboard: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {dashboard.clouds.map((cloud, idx) => (
                 <div key={idx} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <h3 className="font-semibold text-gray-900 mb-2">{cloud.provider}</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900">{cloud.provider}</h3>
+                    <ProviderBadge provider={cloud.provider} />
+                  </div>
                   <p className="text-2xl font-bold text-primary mb-2">
                     ${cloud.total_cost.toFixed(2)}
                   </p>
-                  <div className={`inline-block px-2 py-1 rounded text-sm font-semibold ${
-                    cloud.is_fresh ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {cloud.is_fresh ? 'Fresh' : 'Stale'}
-                  </div>
+                  <FreshnessIndicator timestamp={lastSyncedAt} isFresh={cloud.is_fresh} />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Typical services: {getProviderMeta(cloud.provider).services.join(', ')}
+                  </p>
 
                   {cloud.top_services.length > 0 && (
                     <div className="mt-4">

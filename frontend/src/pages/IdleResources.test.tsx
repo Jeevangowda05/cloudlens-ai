@@ -20,7 +20,7 @@ describe('IdleResources', () => {
   it('filters resources by type', () => {
     render(<IdleResources />);
 
-    const filterSelect = screen.getAllByRole('combobox')[0];
+    const filterSelect = screen.getByLabelText('Filter by Resource Type');
     fireEvent.change(filterSelect, { target: { value: 'Storage' } });
 
     expect(screen.getByText('archive-access-logs')).toBeInTheDocument();
@@ -31,7 +31,7 @@ describe('IdleResources', () => {
   it('sorts resources by idle duration', () => {
     render(<IdleResources />);
 
-    const sortSelect = screen.getAllByRole('combobox')[1];
+    const sortSelect = screen.getByLabelText('Sort by');
     fireEvent.change(sortSelect, { target: { value: 'idleDuration' } });
 
     const cards = screen.getAllByRole('heading', { level: 3 });
