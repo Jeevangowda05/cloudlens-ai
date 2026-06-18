@@ -5,9 +5,11 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Loading } from '../components/Loading';
 import { Alert } from '../components/Alert';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import api from '../services/api';
 import { AlertRule } from '../types';
-import { Bell, Plus, Trash2, Power } from 'lucide-react';
+import { Bell, Plus, Trash2, Power, RefreshCw } from 'lucide-react';
 
 export const Alerts: React.FC = () => {
   const [rules, setRules] = useState<AlertRule[]>([]);
@@ -16,6 +18,8 @@ export const Alerts: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -33,6 +37,7 @@ export const Alerts: React.FC = () => {
       setLoading(true);
       const data = await api.listAlertRules();
       setRules(data.rules || []);
+      setLastSyncedAt(new Date());
     } catch (err: any) {
       setError('Failed to load alert rules');
       console.error(err);
@@ -91,21 +96,37 @@ export const Alerts: React.FC = () => {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      setSyncing(true);
+      await fetchRules();
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (loading) return <Layout><Loading /></Layout>;
 
   return (
     <Layout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Alert Rules</h1>
             <p className="text-gray-600 mt-1">Set up notifications for cost anomalies</p>
+            <FreshnessIndicator timestamp={lastSyncedAt} isSyncing={syncing} />
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="flex items-center space-x-2">
-            <Plus size={20} />
-            <span>New Rule</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleRefresh} disabled={syncing} className="flex items-center space-x-2">
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              <span>{syncing ? 'Refreshing...' : 'Refresh Rules'}</span>
+            </Button>
+            <Button onClick={() => setShowForm(!showForm)} className="flex items-center space-x-2">
+              <Plus size={20} />
+              <span>New Rule</span>
+            </Button>
+          </div>
         </div>
 
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
@@ -209,7 +230,9 @@ export const Alerts: React.FC = () => {
                         </div>
                         <div>
                           <p className="text-gray-600 text-xs uppercase font-semibold">Provider</p>
-                          <p className="font-semibold text-gray-900 mt-1">{rule.cloud_provider}</p>
+                          <div className="mt-1">
+                            <ProviderBadge provider={rule.cloud_provider} />
+                          </div>
                         </div>
                         <div>
                           <p className="text-gray-600 text-xs uppercase font-semibold">Threshold</p>

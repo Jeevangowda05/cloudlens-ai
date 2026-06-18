@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import { Leaf, Gauge, Cloud, TrendingDown } from 'lucide-react';
 
 const carbonStats = [
@@ -16,7 +18,23 @@ const sustainabilityActions = [
 ];
 
 export const CarbonFootprint: React.FC = () => {
-  const sustainabilityScore = 78;
+  const [provider, setProvider] = useState('AWS');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
+  const providerMultiplier = provider === 'AWS' ? 1 : provider === 'AZURE' ? 0.94 : 0.9;
+  const sustainabilityScore = useMemo(() => Math.round(78 / providerMultiplier), [providerMultiplier]);
+  const providerStats = useMemo(
+    () =>
+      carbonStats.map((item) => ({
+        ...item,
+        value:
+          item.title === 'Estimated CO₂ / Month'
+            ? `${(1.84 * providerMultiplier).toFixed(2)} tCO₂e`
+            : item.title === 'Green Workloads'
+              ? `${Math.round(68 + (provider === 'GCP' ? 5 : provider === 'AZURE' ? 2 : 0))}%`
+              : `${Math.round(14 + (provider === 'GCP' ? 3 : provider === 'AZURE' ? 1 : 0))}%`,
+      })),
+    [provider, providerMultiplier]
+  );
 
   return (
     <Layout>
@@ -29,7 +47,26 @@ export const CarbonFootprint: React.FC = () => {
           <p className="text-gray-600 mt-1">
             Track cloud environmental impact with a sustainability score
           </p>
+          <div className="mt-2 flex items-center gap-2">
+            <ProviderBadge provider={provider} />
+            <FreshnessIndicator timestamp={lastSyncedAt} />
+          </div>
         </div>
+        <Card>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Cloud Provider</label>
+          <select
+            value={provider}
+            onChange={(event) => {
+              setProvider(event.target.value);
+              setLastSyncedAt(new Date());
+            }}
+            className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="AWS">AWS</option>
+            <option value="AZURE">Azure</option>
+            <option value="GCP">GCP</option>
+          </select>
+        </Card>
 
         <Card>
           <div className="flex items-start justify-between gap-6">
@@ -55,7 +92,7 @@ export const CarbonFootprint: React.FC = () => {
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {carbonStats.map((item) => (
+          {providerStats.map((item) => (
             <Card key={item.title}>
               <div className="flex items-center justify-between">
                 <div>

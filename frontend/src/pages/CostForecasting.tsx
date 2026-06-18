@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import {
   ResponsiveContainer,
   LineChart,
@@ -15,6 +17,7 @@ import {
   Bar,
 } from 'recharts';
 import { AlertTriangle, Download, TrendingDown, TrendingUp } from 'lucide-react';
+import { getProviderMeta, getProviderMultiplier } from '../utils/multicloud';
 
 type ServiceKey = 'EC2' | 'RDS' | 'Storage' | 'Network' | 'Other';
 
@@ -73,22 +76,27 @@ const getRelativeMonthLabel = (offsetFromCurrentMonth: number): string => {
 };
 
 export const CostForecasting: React.FC = () => {
+  const [provider, setProvider] = useState('AWS');
   const [scenarioGrowthRate, setScenarioGrowthRate] = useState(5);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
 
   const historicalData = useMemo<HistoricalPoint[]>(
     () =>
-      HISTORY_TOTALS.map((total, idx) => ({
+      HISTORY_TOTALS.map((total, idx) => {
+        const scaledTotal = total * getProviderMultiplier(provider);
+        return ({
         month: getRelativeMonthLabel(idx - (HISTORY_TOTALS.length - 1)),
-        total,
+        total: scaledTotal,
         services: {
-          EC2: total * SERVICE_MIX.EC2,
-          RDS: total * SERVICE_MIX.RDS,
-          Storage: total * SERVICE_MIX.Storage,
-          Network: total * SERVICE_MIX.Network,
-          Other: total * SERVICE_MIX.Other,
+          EC2: scaledTotal * SERVICE_MIX.EC2,
+          RDS: scaledTotal * SERVICE_MIX.RDS,
+          Storage: scaledTotal * SERVICE_MIX.Storage,
+          Network: scaledTotal * SERVICE_MIX.Network,
+          Other: scaledTotal * SERVICE_MIX.Other,
         },
-      })),
-    []
+      });
+    }),
+    [provider]
   );
 
   const modelResults = useMemo(() => {
@@ -224,12 +232,40 @@ export const CostForecasting: React.FC = () => {
               <span>Cost Forecasting</span>
             </h1>
             <p className="text-gray-600 mt-1">Predict future cloud spending with simple trend modeling.</p>
+            <div className="mt-2 flex items-center gap-2">
+              <ProviderBadge provider={provider} />
+              <FreshnessIndicator timestamp={lastSyncedAt} />
+            </div>
           </div>
           <Button onClick={exportCsv} className="flex items-center space-x-2">
             <Download size={16} />
             <span>Export Forecast CSV</span>
           </Button>
         </div>
+        <Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="forecast-provider" className="block text-sm font-semibold text-gray-700 mb-2">Cloud Provider</label>
+              <select
+                id="forecast-provider"
+                value={provider}
+                onChange={(event) => {
+                  setProvider(event.target.value);
+                  setLastSyncedAt(new Date());
+                }}
+                className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="AWS">AWS</option>
+                <option value="AZURE">Azure</option>
+                <option value="GCP">GCP</option>
+              </select>
+            </div>
+            <div className="text-sm text-gray-600">
+              <p className="font-semibold text-gray-900">Provider-specific service view</p>
+              <p>{getProviderMeta(provider).services.join(', ')}</p>
+            </div>
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>

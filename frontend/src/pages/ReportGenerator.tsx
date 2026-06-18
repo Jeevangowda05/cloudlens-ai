@@ -3,6 +3,8 @@ import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Alert } from '../components/Alert';
+import { FreshnessIndicator } from '../components/FreshnessIndicator';
+import { ProviderBadge } from '../components/ProviderBadge';
 import {
   ResponsiveContainer,
   BarChart,
@@ -14,6 +16,7 @@ import {
   Legend,
 } from 'recharts';
 import { Download, FileText, Mail, CalendarClock } from 'lucide-react';
+import { getProviderMultiplier } from '../utils/multicloud';
 
 interface MonthlySummary {
   month: string;
@@ -138,22 +141,51 @@ export const ReportGenerator: React.FC = () => {
   const [includeRecommendations, setIncludeRecommendations] = useState(true);
   const [includeAnomalies, setIncludeAnomalies] = useState(true);
   const [message, setMessage] = useState('');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
+
+  const providerMultiplier = useMemo(
+    () => (providerFilter === 'All' ? 1 : getProviderMultiplier(providerFilter)),
+    [providerFilter]
+  );
+
+  const effectiveMonthlySummary = useMemo(
+    () =>
+      monthlySummary.map((row) => ({
+        ...row,
+        total: row.total * providerMultiplier,
+        budget: row.budget * providerMultiplier,
+      })),
+    [providerMultiplier]
+  );
 
   const growthRate = useMemo(() => {
-    const first = monthlySummary[0].total;
-    const last = monthlySummary[monthlySummary.length - 1].total;
+    const first = effectiveMonthlySummary[0].total;
+    const last = effectiveMonthlySummary[effectiveMonthlySummary.length - 1].total;
     return ((last - first) / first) * 100;
-  }, []);
+  }, [effectiveMonthlySummary]);
 
   const budgetVariance = useMemo(
     () =>
-      monthlySummary.map((row) => ({
+      effectiveMonthlySummary.map((row) => ({
         month: row.month,
         actual: row.total,
         budget: row.budget,
         variance: row.total - row.budget,
       })),
-    []
+    [effectiveMonthlySummary]
+  );
+
+  const effectiveServiceBreakdown = useMemo(
+    () => serviceBreakdown.map((row) => ({ ...row, cost: row.cost * providerMultiplier })),
+    [providerMultiplier]
+  );
+  const effectiveRegionBreakdown = useMemo(
+    () => regionBreakdown.map((row) => ({ ...row, cost: row.cost * providerMultiplier })),
+    [providerMultiplier]
+  );
+  const effectiveTagBreakdown = useMemo(
+    () => tagBreakdown.map((row) => ({ ...row, cost: row.cost * providerMultiplier })),
+    [providerMultiplier]
   );
 
   const previewSections = useMemo(() => {
@@ -202,6 +234,10 @@ export const ReportGenerator: React.FC = () => {
               <span>PDF Report Generator</span>
             </h1>
             <p className="text-gray-600 mt-1">Create downloadable cloud cost reports with delivery controls.</p>
+            <div className="mt-2 flex items-center gap-2">
+              <ProviderBadge provider={providerFilter === 'All' ? 'AWS' : providerFilter} />
+              <FreshnessIndicator timestamp={lastSyncedAt} />
+            </div>
           </div>
           <Button onClick={handleDownloadPdf} className="flex items-center space-x-2">
             <Download size={16} />
@@ -253,7 +289,10 @@ export const ReportGenerator: React.FC = () => {
                 <select
                   id="provider-filter"
                   value={providerFilter}
-                  onChange={(event) => setProviderFilter(event.target.value)}
+                  onChange={(event) => {
+                    setProviderFilter(event.target.value);
+                    setLastSyncedAt(new Date());
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="All">All Providers</option>
@@ -328,7 +367,7 @@ export const ReportGenerator: React.FC = () => {
           <Card>
             <h2 className="text-lg font-bold mb-3">By Service</h2>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={serviceBreakdown}>
+              <BarChart data={effectiveServiceBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
@@ -340,7 +379,7 @@ export const ReportGenerator: React.FC = () => {
           <Card>
             <h2 className="text-lg font-bold mb-3">By Region</h2>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={regionBreakdown}>
+              <BarChart data={effectiveRegionBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
@@ -352,7 +391,7 @@ export const ReportGenerator: React.FC = () => {
           <Card>
             <h2 className="text-lg font-bold mb-3">By Tag</h2>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={tagBreakdown}>
+              <BarChart data={effectiveTagBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
